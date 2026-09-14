@@ -1,0 +1,15 @@
+export const DEFAULT_MODEL = 'xai/grok-4.6'
+export const DEFAULT_MAX_CONCURRENT_TURNS = 3
+export const DEFAULT_CONTEXT_MESSAGES = 60
+export const SESSION_COOKIE = 'sw_session'
+export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30
+export const APPROVAL_TTL_MS = 24 * 60 * 60 * 1000
+export const MAX_HANDOFF_DEPTH = 3
+export const MESSAGE_DELTA_INTERVAL_MS = 150
+export const MAX_TURN_EVENTS = 2_000
+export const BOT_COLORS = ['#F04438', '#2E90FA', '#EE46BC', '#F79009', '#7A5C3E', '#98A2B3', '#12B76A', '#7A5AF8', '#06AED4', '#101828'] as const
+export const BOT_SHAPES = ['circle', 'triangle', 'drop', 'hex', 'blob'] as const
+export const BOT_EYES = ['dot', 'round', 'happy', 'sleepy', 'wink'] as const
+export const BOT_MOUTHS = ['smile', 'grin', 'flat', 'open', 'none'] as const
+export const BOT_ACCESSORIES = ['none', 'glasses', 'headphones', 'antenna', 'bow', 'cap'] as const
+export const BOT_PERSONALITIES = ['calm', 'playful', 'curious', 'gremlin'] as const
