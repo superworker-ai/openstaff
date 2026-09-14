@@ -1,0 +1,1 @@
+ALTER TABLE bots ADD COLUMN suggested_apps TEXT NOT NULL DEFAULT '[]';

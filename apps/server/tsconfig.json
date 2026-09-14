@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "@openstaff/shared": ["../../packages/shared/src/index.ts"],
+      "@openstaff/shared/*": ["../../packages/shared/src/*"]
+    }
+  },
+  "include": ["src", "drizzle.config.ts"]
+}
