@@ -1,0 +1,13 @@
+# Gitleaks configuration. CI runs `gitleaks git` and `gitleaks dir` from the repo root.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Fixtures and environment-variable references that are not credentials"
+regexTarget = "line"
+regexes = [
+  # compose-smoke fixture key: 64 hex characters, obviously synthetic.
+  '''SECRETS_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef''',
+  # The Computer healthcheck passes a shell variable to curl, not a literal password.
+  '''curl -sf -u "viewer:\$\{COMPUTER_VIEWER_PASSWORD:\?\}"''',
+]
