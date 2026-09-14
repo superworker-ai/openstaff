@@ -94,6 +94,17 @@ explicit Docker overlay only when selecting Docker as the Computer provider. See
 [self-hosting](docs/SELF_HOSTING.md), [backup and restore](docs/BACKUP_RESTORE.md), and
 [releases](docs/RELEASES.md).
 
+### Deploy to a cloud host
+
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/new)
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/juancgarza/open-superworkers)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/juancgarza/open-superworkers/tree/main/deploy/cloudflare)
+
+Railway runs the gateway, server, and web as three services with a volume. Render uses the
+`render.yaml` blueprint with a disk. Cloudflare runs the all-in-one image in a Container with
+SQLite replicated to R2. The same Dockerfile serves every host through the `OPENSTAFF_TARGET`
+build argument. See [deploy](docs/DEPLOY.md) for each recipe and its caveats.
+
 ## Docker quick start
 
 Docker Engine/Desktop with a recent Compose v2 supporting volume subpaths is required.

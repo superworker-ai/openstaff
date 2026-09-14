@@ -1,0 +1,7 @@
+# TLS is terminated by the platform. Listen on the platform port and route by path.
+# SERVER_UPSTREAM and WEB_UPSTREAM are host:port pairs on the platform's private network.
+:{$PORT:3000} {
+	@api path /api/* /ws
+	reverse_proxy @api {$SERVER_UPSTREAM:server:8787}
+	reverse_proxy {$WEB_UPSTREAM:web:3001}
+}

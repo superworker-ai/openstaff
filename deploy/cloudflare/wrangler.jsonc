@@ -1,0 +1,37 @@
+// Cloudflare Workers + Containers deployment of OpenStaff.
+// One container instance runs the gateway, server, and web app (docker/app.Dockerfile,
+// target `allinone`). Container disk is ephemeral: set the S3_* secrets to an R2 bucket so
+// Litestream restores SQLite on boot and replicates it continuously, and workspace files
+// go to the same bucket. See docs/DEPLOY.md.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "openstaff",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-06-01",
+  "observability": { "enabled": true },
+  "containers": [
+    {
+      "class_name": "OpenStaff",
+      "image": "../../docker/app.Dockerfile",
+      "image_build_context": "../..",
+      "image_vars": { "OPENSTAFF_TARGET": "allinone" },
+      "instance_type": "standard-2",
+      "max_instances": 1
+    }
+  ],
+  "durable_objects": {
+    "bindings": [{ "name": "OPENSTAFF", "class_name": "OpenStaff" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["OpenStaff"] }],
+  // Non-secret configuration. Secrets (SECRETS_KEY, SIGNUP_CODE, model keys, S3 credentials)
+  // are set with `wrangler secret put` and reach the container the same way.
+  "vars": {
+    "NODE_ENV": "production",
+    "DATA_DIR": "/data",
+    "SERVER_PORT": "8787",
+    "DEFAULT_MODEL": "xai/grok-4.6",
+    "WORKSPACE_STORE": "s3",
+    "S3_PROVIDER": "r2",
+    "S3_PREFIX": "workspace/"
+  }
+}

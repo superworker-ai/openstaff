@@ -2,6 +2,8 @@
 
 Use Node 22.22.3 or newer in the Node 22 line and pnpm via Corepack. Read
 [ARCHITECTURE](docs/ARCHITECTURE.md) and [PLAN](docs/PLAN.md) before changing behavior.
+New here? Follow [ONBOARDING](docs/ONBOARDING.md); coding agents run the `self-onboarding`
+skill in `.claude/skills/self-onboarding/SKILL.md`, which is the same checklist.
 
 Install dependencies, configure `.env`, and install Chromium as described in the README.
 Keep changes focused, TypeScript strict, and files small. Add a regression test for fixes.

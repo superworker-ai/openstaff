@@ -1,7 +1,7 @@
 # Self-hosting
 
 The supported production path is one Linux VM with Docker Compose and one durable
-volume. This is a single-tenant application: every admitted user shares the workspace,
+volume. Managed hosts (Railway, Render, Cloudflare) are covered in [deploy](DEPLOY.md). This is a single-tenant application: every admitted user shares the workspace,
 browser session, and selected Computer.
 
 New installations store SQLite data in `DATA_DIR/openstaff.db`. If an older installation
