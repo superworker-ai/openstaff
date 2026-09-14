@@ -1,0 +1,65 @@
+services:
+  computer:
+    build: docker/computer
+    image: superworkers/computer:local
+    container_name: superworkers-computer
+    labels:
+      superworkers.desktop: "1"
+    environment:
+      COMPUTER_VIEWER_PASSWORD: ${COMPUTER_VIEWER_PASSWORD:?set in .env}
+      COMPUTER_CONTROLLER_PASSWORD: ${COMPUTER_CONTROLLER_PASSWORD:?set in .env}
+      COMPUTER_CHROME_NO_SANDBOX: ${COMPUTER_CHROME_NO_SANDBOX:-}
+    shm_size: 1g
+    mem_limit: 4g
+    pids_limit: 2048
+    privileged: false
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+      - seccomp:./docker/computer/seccomp.json
+    restart: unless-stopped
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    volumes:
+      - type: volume
+        source: data
+        target: /workspace
+        volume:
+          subpath: workspace
+      - type: volume
+        source: home
+        target: /home/worker
+  docker-proxy:
+    image: tecnativa/docker-socket-proxy:0.3.0
+    environment:
+      CONTAINERS: 1
+      EXEC: 1
+      IMAGES: 1
+      POST: 1
+    volumes: ["/var/run/docker.sock:/var/run/docker.sock:ro"]
+    restart: unless-stopped
+  server:
+    environment:
+      DOCKER_HOST: tcp://docker-proxy:2375
+      COMPUTER_WORKSPACE_VOLUME: superworkers-data
+      COMPUTER_HOME_VOLUME: ${COMPUTER_HOME_VOLUME:-superworkers-home}
+      COMPUTER_NETWORK: ${COMPUTER_NETWORK:-superworkers-default}
+      COMPUTER_VIEWER_PASSWORD: ${COMPUTER_VIEWER_PASSWORD:?set in .env}
+      COMPUTER_CONTROLLER_PASSWORD: ${COMPUTER_CONTROLLER_PASSWORD:?set in .env}
+      COMPUTER_CDP_URL: ${COMPUTER_CDP_URL:-http://superworkers-computer:9222}
+      COMPUTER_DESKTOP_URL: ${COMPUTER_DESKTOP_URL:-http://superworkers-computer:6901}
+      COMPUTER_CHROME_NO_SANDBOX: ${COMPUTER_CHROME_NO_SANDBOX:-}
+    depends_on:
+      docker-proxy:
+        condition: service_started
+      computer:
+        condition: service_healthy
+
+volumes:
+  home:
+    name: superworkers-home
+
+networks:
+  default:
+    name: superworkers-default

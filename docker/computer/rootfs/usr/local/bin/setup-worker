@@ -1,0 +1,14 @@
+#!/bin/sh
+set -eu
+
+run_directory() {
+  directory="$1"
+  for script in "$directory"/*.sh; do
+    [ -f "$script" ] || continue
+    [ -x "$script" ] || continue
+    "$script"
+  done
+}
+
+run_directory /etc/superworkers/setup.d
+run_directory /home/worker/setup.d

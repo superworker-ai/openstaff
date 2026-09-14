@@ -1,0 +1,12 @@
+services:
+  server:
+    environment:
+      COMPUTER_WORKSPACE_VOLUME: bind:${WORKSPACE_HOST_PATH:?set WORKSPACE_HOST_PATH}
+  computer:
+    volumes: !override
+      - type: bind
+        source: ${WORKSPACE_HOST_PATH:?set WORKSPACE_HOST_PATH}
+        target: /workspace
+      - type: volume
+        source: home
+        target: /home/worker

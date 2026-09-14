@@ -1,0 +1,5 @@
+{$PUBLIC_HOST} {
+  @api path /api/* /ws
+  reverse_proxy @api server:8787
+  reverse_proxy web:3001
+}

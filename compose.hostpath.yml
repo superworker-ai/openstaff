@@ -1,0 +1,13 @@
+services:
+  init:
+    volumes:
+      - data:/data
+      - type: bind
+        source: ${WORKSPACE_HOST_PATH:?set WORKSPACE_HOST_PATH}
+        target: /data/workspace
+  server:
+    volumes:
+      - data:/data
+      - type: bind
+        source: ${WORKSPACE_HOST_PATH:?set WORKSPACE_HOST_PATH}
+        target: /data/workspace

@@ -1,0 +1,4 @@
+#!/command/with-contenv sh
+set -eu
+
+exec node /usr/local/bin/cdp-proxy.mjs

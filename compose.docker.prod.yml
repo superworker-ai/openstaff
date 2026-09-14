@@ -1,0 +1,4 @@
+services:
+  computer:
+    image: ghcr.io/${GHCR_OWNER:-superworker-ai}/openstaff-computer:${OPENSTAFF_VERSION:-latest}
+    build: !reset null

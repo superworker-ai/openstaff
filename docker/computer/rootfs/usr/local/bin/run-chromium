@@ -1,0 +1,47 @@
+#!/command/with-contenv sh
+set -eu
+
+PROFILE=/home/worker/.config/superworkers/chrome
+STATE=/run/superworkers-chromium-sandbox
+
+until env HOME=/home/worker DISPLAY=:1 xprop -root _NET_SUPPORTING_WM_CHECK >/dev/null 2>&1; do sleep 0.2; done
+rm -f "$PROFILE/SingletonLock" "$PROFILE/SingletonSocket" "$PROFILE/SingletonCookie"
+
+set -- \
+  --user-data-dir="$PROFILE" \
+  --remote-debugging-address=127.0.0.1 \
+  --remote-debugging-port=9223 \
+  --remote-allow-origins=* \
+  --password-store=basic \
+  --window-size=1280,800 \
+  --start-maximized \
+  --no-first-run \
+  --no-default-browser-check \
+  --disable-dev-shm-usage=false
+
+# COMPUTER_CHROME_NO_SANDBOX: 1 = always disable the Chromium sandbox, 0 = always require it,
+# unset = probe once per start and fall back only when the host cannot run it. The container
+# boundary (non-root, cap_drop ALL, seccomp, no-new-privileges) remains either way.
+sandbox_probe() {
+  rm -rf /tmp/chromium-sandbox-probe
+  env HOME=/home/worker DISPLAY=:1 timeout 20 /usr/local/bin/chromium \
+    --headless --disable-gpu --no-first-run --user-data-dir=/tmp/chromium-sandbox-probe \
+    --dump-dom about:blank >/dev/null 2>&1
+  status=$?
+  rm -rf /tmp/chromium-sandbox-probe
+  return $status
+}
+
+case "${COMPUTER_CHROME_NO_SANDBOX:-}" in
+  1) sandbox=disabled ;;
+  0) sandbox=enabled ;;
+  *) if sandbox_probe; then sandbox=enabled; else sandbox=fallback; fi ;;
+esac
+echo "$sandbox" > "$STATE"
+case "$sandbox" in
+  disabled) echo "chromium: sandbox disabled by COMPUTER_CHROME_NO_SANDBOX=1" >&2; set -- "$@" --no-sandbox ;;
+  fallback) echo "chromium: sandbox unavailable on this host (probe failed); starting with --no-sandbox. Set COMPUTER_CHROME_NO_SANDBOX=0 to require the sandbox." >&2; set -- "$@" --no-sandbox ;;
+  enabled) echo "chromium: sandbox enabled" >&2 ;;
+esac
+
+exec env HOME=/home/worker DISPLAY=:1 /usr/local/bin/chromium "$@"

@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+
+until env HOME=/home/worker DISPLAY=:1 xdpyinfo -display :1 >/dev/null 2>&1; do sleep 0.2; done
+exec env HOME=/home/worker DISPLAY=:1 openbox --sm-disable

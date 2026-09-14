@@ -1,0 +1,7 @@
+#!/command/with-contenv sh
+set -eu
+
+[ -n "${COMPUTER_VIEWER_PASSWORD:-}" ] || { echo "COMPUTER_VIEWER_PASSWORD is required" >&2; exit 1; }
+[ -n "${COMPUTER_CONTROLLER_PASSWORD:-}" ] || { echo "COMPUTER_CONTROLLER_PASSWORD is required" >&2; exit 1; }
+[ "${#COMPUTER_VIEWER_PASSWORD}" -ge 6 ] && [ "${#COMPUTER_CONTROLLER_PASSWORD}" -ge 6 ] || { echo "COMPUTER_VIEWER_PASSWORD and COMPUTER_CONTROLLER_PASSWORD must be at least 6 characters (KasmVNC rejects shorter ones)" >&2; sleep 5; exit 1; }
+exec env HOME=/home/worker DISPLAY=:1 /usr/local/bin/run-kasmvnc-worker

@@ -1,0 +1,16 @@
+#!/bin/sh
+set -eu
+
+usage() {
+  echo "usage: sw-screenshot <jpeg-path> [quality 1-100]" >&2
+  exit 2
+}
+
+[ "$#" -ge 1 ] && [ "$#" -le 2 ] || usage
+path=$1
+quality=${2:-60}
+[ -n "$path" ] || usage
+case "$quality" in ''|*[!0-9]*) usage ;; esac
+[ "$quality" -ge 1 ] && [ "$quality" -le 100 ] || usage
+
+exec env DISPLAY=:1 scrot --quality "$quality" "$path"

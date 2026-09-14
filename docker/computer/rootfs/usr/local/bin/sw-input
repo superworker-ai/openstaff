@@ -1,0 +1,58 @@
+#!/bin/sh
+set -eu
+
+usage() {
+  echo "usage: sw-input click|dblclick|move|drag|type-b64|key|scroll ..." >&2
+  exit 2
+}
+
+integer() {
+  case "$1" in ''|*[!0-9]*) usage ;; esac
+}
+
+[ "$#" -ge 1 ] || usage
+action=$1
+shift
+
+case "$action" in
+  click)
+    [ "$#" -ge 2 ] && [ "$#" -le 3 ] || usage
+    integer "$1"; integer "$2"
+    button=${3:-1}
+    case "$button" in 1|2|3) ;; *) usage ;; esac
+    exec env DISPLAY=:1 xdotool mousemove --sync "$1" "$2" click "$button"
+    ;;
+  dblclick)
+    [ "$#" -eq 2 ] || usage
+    integer "$1"; integer "$2"
+    exec env DISPLAY=:1 xdotool mousemove --sync "$1" "$2" click --repeat 2 --delay 120 1
+    ;;
+  move)
+    [ "$#" -eq 2 ] || usage
+    integer "$1"; integer "$2"
+    exec env DISPLAY=:1 xdotool mousemove --sync "$1" "$2"
+    ;;
+  drag)
+    [ "$#" -eq 4 ] || usage
+    integer "$1"; integer "$2"; integer "$3"; integer "$4"
+    exec env DISPLAY=:1 xdotool mousemove --sync "$1" "$2" mousedown 1 mousemove --sync "$3" "$4" mouseup 1
+    ;;
+  type-b64)
+    [ "$#" -eq 1 ] || usage
+    case "$1" in *[!A-Za-z0-9+/=]*) usage ;; esac
+    printf '%s' "$1" | base64 -d | env DISPLAY=:1 xdotool type --delay 12 --file -
+    ;;
+  key)
+    [ "$#" -eq 1 ] || usage
+    case "$1" in ''|*[!A-Za-z0-9_+]*) usage ;; esac
+    exec env DISPLAY=:1 xdotool key "$1"
+    ;;
+  scroll)
+    [ "$#" -eq 4 ] || usage
+    integer "$1"; integer "$2"; integer "$4"
+    [ "$4" -ge 1 ] && [ "$4" -le 20 ] || usage
+    case "$3" in up) button=4 ;; down) button=5 ;; *) usage ;; esac
+    exec env DISPLAY=:1 xdotool mousemove --sync "$1" "$2" click --repeat "$4" --delay 50 "$button"
+    ;;
+  *) usage ;;
+esac

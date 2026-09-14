@@ -1,0 +1,21 @@
+services:
+  migrate:
+    image: ghcr.io/${GHCR_OWNER:-superworker-ai}/openstaff-server:${OPENSTAFF_VERSION:-latest}
+    build: !reset null
+  server:
+    image: ghcr.io/${GHCR_OWNER:-superworker-ai}/openstaff-server:${OPENSTAFF_VERSION:-latest}
+    build: !reset null
+  web:
+    image: ghcr.io/${GHCR_OWNER:-superworker-ai}/openstaff-web:${OPENSTAFF_VERSION:-latest}
+    build: !reset null
+  gateway:
+    environment:
+      PUBLIC_HOST: ${PUBLIC_HOST:-localhost}
+    ports: !override ["80:80", "443:443"]
+    volumes:
+      - ./docker/Caddyfile.prod:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+volumes:
+  caddy_data:
+  caddy_config:
