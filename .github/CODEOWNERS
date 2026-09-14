@@ -1,0 +1,9 @@
+/apps/server/src/auth/ @superworker-ai/maintainers
+/apps/server/src/computer/ @superworker-ai/maintainers
+/apps/server/drizzle/ @superworker-ai/maintainers
+/docker-compose.yml @superworker-ai/maintainers
+/compose*.yml @superworker-ai/maintainers
+/.github/workflows/ @superworker-ai/maintainers
+/SECURITY.md @superworker-ai/maintainers
+/CODE_OF_CONDUCT.md @superworker-ai/maintainers
+/GOVERNANCE.md @superworker-ai/maintainers

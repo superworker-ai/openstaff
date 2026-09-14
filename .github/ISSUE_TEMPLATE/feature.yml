@@ -1,0 +1,7 @@
+name: Feature request
+description: Propose a focused improvement.
+body:
+  - type: textarea
+    attributes: { label: Problem }
+  - type: textarea
+    attributes: { label: Proposed solution }

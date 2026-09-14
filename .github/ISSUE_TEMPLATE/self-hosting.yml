@@ -1,0 +1,7 @@
+name: Self-hosting help
+description: Get help with the documented Compose deployment.
+body:
+  - type: textarea
+    attributes: { label: Environment and provider }
+  - type: textarea
+    attributes: { label: Doctor output with secrets removed }

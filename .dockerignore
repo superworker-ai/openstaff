@@ -1,0 +1,12 @@
+node_modules
+**/node_modules
+data
+data-test-*
+**/data-test-*
+**/dist
+**/.output
+**/.tanstack
+.git
+.context
+.env
+coverage

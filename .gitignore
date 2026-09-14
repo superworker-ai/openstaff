@@ -1,0 +1,41 @@
+node_modules/
+data/
+.env
+dist/
+.output/
+.tanstack/
+routeTree.gen.ts
+coverage/
+data-test-*/
+*.db
+*.db-shm
+*.db-wal
+apps/web/src/routeTree.gen.ts
+.firecrawl/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Local env variants
+.env.*
+!.env.example
+
+# Logs, temp, test artifacts
+*.log
+npm-debug.log*
+pnpm-debug.log*
+tmp/
+.tmp/
+*.tmp
+test-results/
+playwright-report/
+.turbo/
+.vite/
+*.tsbuildinfo
+
+# Agent scratch
+.context/

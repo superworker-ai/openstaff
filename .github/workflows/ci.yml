@@ -1,0 +1,102 @@
+name: CI
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    services:
+      minio:
+        image: minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+        env:
+          MINIO_ROOT_USER: minio-ci
+          MINIO_ROOT_PASSWORD: openstaffminiofixture
+        ports: ["9000:9000"]
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with: { persist-credentials: false }
+      - name: Start the MinIO service command
+        run: |
+          docker rm -f "${{ job.services.minio.id }}"
+          docker run --detach --name openstaff-ci-minio --publish 9000:9000 \
+            --env MINIO_ROOT_USER=minio-ci --env MINIO_ROOT_PASSWORD=openstaffminiofixture \
+            minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e server /data
+          until curl --fail --silent http://127.0.0.1:9000/minio/health/live >/dev/null; do sleep 1; done
+      - uses: pnpm/action-setup@9fd676a19091d4595eefd76e4bd31c97133911f1
+        with: { version: 10 }
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter server exec playwright install --with-deps chromium
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm test
+        env:
+          S3_TESTS: 1
+          S3_ENDPOINT: http://127.0.0.1:9000
+          S3_REGION: us-east-1
+          S3_BUCKET: openstaff-ci
+          S3_PREFIX: workspace/
+          S3_PROVIDER: minio
+          S3_ACCESS_KEY_ID: minio-ci
+          S3_SECRET_ACCESS_KEY: openstaffminiofixture
+          S3_FORCE_PATH_STYLE: 1
+      - run: pnpm build
+  compose-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with: { persist-credentials: false }
+      - name: Validate supported Compose combinations
+        env:
+          COMPUTER_VIEWER_PASSWORD: ci-viewer-fixture
+          COMPUTER_CONTROLLER_PASSWORD: ci-controller-fixture
+          WORKSPACE_HOST_PATH: /tmp/openstaff-workspace
+        run: |
+          for docker in 0 1; do for prod in 0 1; do for litestream in 0 1; do for hostpath in 0 1; do
+            files=(-f docker-compose.yml)
+            if [ "$docker" = 1 ]; then files+=(-f compose.docker.yml); fi
+            if [ "$prod" = 1 ]; then files+=(-f compose.prod.yml); fi
+            if [ "$docker$prod" = 11 ]; then files+=(-f compose.docker.prod.yml); fi
+            if [ "$litestream" = 1 ]; then files+=(-f compose.litestream.yml); fi
+            if [ "$hostpath" = 1 ]; then files+=(-f compose.hostpath.yml); fi
+            if [ "$docker$hostpath" = 11 ]; then files+=(-f compose.docker.hostpath.yml); fi
+            docker compose "${files[@]}" config --quiet
+          done; done; done; done
+          docker compose -f docker-compose.yml -f compose.docker.yml -f compose.prod.yml config --quiet
+          test "$(docker compose -f docker-compose.yml -f compose.prod.yml config --services | grep -cx computer)" = 0
+          test "$(docker compose -f docker-compose.yml -f compose.hostpath.yml config --services | grep -cx computer)" = 0
+      - name: Build and boot the local Computer stack
+        run: COMPUTER_DRIVER=local XAI_API_KEY=compose-smoke SECRETS_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef PUBLIC_APP_URL=https://compose-smoke.example.test docker compose up --build -d --wait
+      - name: Check gateway health
+        run: |
+          curl --fail http://127.0.0.1:3000/api/ready
+          curl --fail http://127.0.0.1:3000/api/health
+      - if: failure()
+        run: docker compose logs --no-color
+      - if: always()
+        run: docker compose down --volumes
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with: { fetch-depth: 0, persist-credentials: false }
+      - uses: pnpm/action-setup@9fd676a19091d4595eefd76e4bd31c97133911f1
+        with: { version: 10 }
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm audit --audit-level=high
+      - name: Scan history and working tree for secrets
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          curl --fail --location --silent --show-error https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz -o gitleaks.tar.gz
+          echo '551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  gitleaks.tar.gz' | sha256sum --check
+          tar -xzf gitleaks.tar.gz gitleaks
+          cd "$GITHUB_WORKSPACE"
+          "$RUNNER_TEMP/gitleaks" git . --redact
+          git ls-files -z | tar --null -T - -cf "$RUNNER_TEMP/source.tar"
+          mkdir "$RUNNER_TEMP/source"
+          tar -xf "$RUNNER_TEMP/source.tar" -C "$RUNNER_TEMP/source"
+          "$RUNNER_TEMP/gitleaks" dir "$RUNNER_TEMP/source" --redact

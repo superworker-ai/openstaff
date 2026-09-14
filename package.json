@@ -1,0 +1,29 @@
+{
+  "name": "openstaff",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.33.2",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n server,web -c blue,magenta \"pnpm --filter server dev\" \"pnpm --filter web dev\"",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "computer:build": "docker build -t superworkers/computer:local docker/computer",
+    "db:migrate": "pnpm --filter server db:migrate",
+    "doctor": "pnpm --filter server run doctor",
+    "db:backup": "pnpm --filter server exec tsx ../../scripts/backup.ts",
+    "db:restore": "pnpm --filter server exec tsx ../../scripts/restore.ts"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "concurrently": "^9.2.1",
+    "eslint": "^9.39.1",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.48.0",
+    "vitest": "^4.0.15"
+  }
+}

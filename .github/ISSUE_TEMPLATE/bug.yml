@@ -1,0 +1,7 @@
+name: Bug report
+description: Report a reproducible defect.
+body:
+  - type: textarea
+    attributes: { label: What happened? }
+  - type: textarea
+    attributes: { label: Steps to reproduce }
