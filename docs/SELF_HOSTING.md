@@ -10,6 +10,13 @@ has only `DATA_DIR/superworkers.db`, the server renames it to `openstaff.db` on 
 Self-hosters can ignore the hosted-mode variables. Their defaults select the unrestricted
 `self-hosted` plan with an active workspace, editable provider keys, and no usage export.
 
+Authentication also has development-friendly defaults: sign-up is open and the `console`
+email provider prints verification, password-reset, magic-link, and invitation URLs to
+stdout. For a private deployment, set `AUTH_SIGNUP` to `code` with `SIGNUP_CODE`, or to
+`invite`. Production email can use `smtp` with `SMTP_URL` or `resend` with
+`RESEND_API_KEY`; both require `EMAIL_FROM`. Set `AUTH_TRUSTED_ORIGINS` when browsers use
+origins beyond `PUBLIC_APP_URL`.
+
 1. Install Docker Engine with Compose v2 and point a DNS name at the VM.
 2. Copy `.env.example` to `.env`. Set `PUBLIC_HOST`, an HTTPS `PUBLIC_APP_URL`, a
    random 32-byte `SECRETS_KEY`, and one model key. Configure E2B, Daytona, Freestyle, or Vercel Sandbox only if

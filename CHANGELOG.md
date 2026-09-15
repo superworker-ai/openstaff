@@ -6,6 +6,9 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Added
 
+- Better Auth password and magic-link authentication, configurable sign-up policies,
+  invitations, member roles, transactional email transports, and workspace audit history.
+  The session-table migration causes a one-time sign-out for every user on upgrade.
 - Environment-driven workspace plans and states, managed model keys, write-path entitlements,
   Computer session metering, control-plane usage export, and an owner Usage settings page.
 - Freestyle VM and Vercel Sandbox Computer providers with persistent lifecycle, snapshots,
