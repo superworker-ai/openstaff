@@ -9,7 +9,7 @@ export async function hashPassword(password: string): Promise<string> {
   return `scrypt:${salt.toString('base64')}:${derived.toString('base64')}`
 }
 
-export async function verifyPassword(password: string, encoded: string): Promise<boolean> {
+export async function verifyLegacyPassword(password: string, encoded: string): Promise<boolean> {
   const [algorithm, saltText, hashText] = encoded.split(':')
   if (algorithm !== 'scrypt' || !saltText || !hashText) return false
   const expected = Buffer.from(hashText, 'base64')

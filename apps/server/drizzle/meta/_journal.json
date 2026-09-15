@@ -99,6 +99,13 @@
       "when": 1799769600013,
       "tag": "0013_computer_sessions",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1799769600014,
+      "tag": "0014_better_auth",
+      "breakpoints": true
     }
   ]
 }

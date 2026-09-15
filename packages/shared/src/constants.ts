@@ -1,8 +1,6 @@
 export const DEFAULT_MODEL = 'xai/grok-4.6'
 export const DEFAULT_MAX_CONCURRENT_TURNS = 3
 export const DEFAULT_CONTEXT_MESSAGES = 60
-export const SESSION_COOKIE = 'sw_session'
-export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30
 export const APPROVAL_TTL_MS = 24 * 60 * 60 * 1000
 export const MAX_HANDOFF_DEPTH = 3
 export const MESSAGE_DELTA_INTERVAL_MS = 150

@@ -1,22 +1,110 @@
-import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
+import { customType, index, integer, primaryKey, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 import { COMPUTER_PROVIDERS, type AppConnection, type Avatar, type JsonValue } from '@openstaff/shared'
 export * from './extensions.js'
+
+const authDate = customType<{ data: Date; driverData: string }>({
+  dataType: () => 'text',
+  fromDriver: (value) => new Date(value),
+  toDriver: (value) => value.toISOString(),
+})
 
 export const users = sqliteTable('users', {
   id: text('id').primaryKey(),
   email: text('email').notNull().unique(),
+  emailVerified: integer('email_verified', { mode: 'boolean' }).notNull().default(false),
   name: text('name').notNull(),
-  passwordHash: text('password_hash').notNull(),
   avatar: text('avatar'),
-  role: text('role', { enum: ['owner', 'member'] }).notNull(),
-  createdAt: text('created_at').notNull(),
+  role: text('role', { enum: ['owner', 'admin', 'member'] }).notNull().default('member'),
+  twoFactorEnabled: integer('two_factor_enabled', { mode: 'boolean' }).notNull().default(false),
+  banned: integer('banned', { mode: 'boolean' }).notNull().default(false),
+  banReason: text('ban_reason'),
+  banExpires: authDate('ban_expires'),
+  createdAt: authDate('created_at').notNull(),
+  updatedAt: authDate('updated_at').notNull(),
 })
 
 export const sessions = sqliteTable('sessions', {
   id: text('id').primaryKey(),
+  token: text('token').notNull().unique(),
   userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  expiresAt: text('expires_at').notNull(),
+  createdAt: authDate('created_at').notNull(),
+  updatedAt: authDate('updated_at').notNull(),
+  expiresAt: authDate('expires_at').notNull(),
+  ipAddress: text('ip_address'),
+  userAgent: text('user_agent'),
+  impersonatedBy: text('impersonated_by'),
 }, (table) => [index('sessions_user_idx').on(table.userId)])
+
+export const account = sqliteTable('account', {
+  id: text('id').primaryKey(),
+  accountId: text('account_id').notNull(),
+  providerId: text('provider_id').notNull(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  accessToken: text('access_token'),
+  refreshToken: text('refresh_token'),
+  idToken: text('id_token'),
+  accessTokenExpiresAt: authDate('access_token_expires_at'),
+  refreshTokenExpiresAt: authDate('refresh_token_expires_at'),
+  scope: text('scope'),
+  password: text('password'),
+  createdAt: authDate('created_at').notNull(),
+  updatedAt: authDate('updated_at').notNull(),
+}, (table) => [uniqueIndex('account_provider_account_unique').on(table.providerId, table.accountId), index('account_user_idx').on(table.userId)])
+
+export const verification = sqliteTable('verification', {
+  id: text('id').primaryKey(),
+  identifier: text('identifier').notNull(),
+  value: text('value').notNull(),
+  expiresAt: authDate('expires_at').notNull(),
+  createdAt: authDate('created_at').notNull(),
+  updatedAt: authDate('updated_at').notNull(),
+}, (table) => [index('verification_identifier_idx').on(table.identifier)])
+
+export const twoFactor = sqliteTable('two_factor', {
+  id: text('id').primaryKey(),
+  secret: text('secret').notNull(),
+  backupCodes: text('backup_codes').notNull(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  verified: integer('verified', { mode: 'boolean' }).notNull().default(true),
+  failedVerificationCount: integer('failed_verification_count').notNull().default(0),
+  lockedUntil: authDate('locked_until'),
+}, (table) => [index('two_factor_secret_idx').on(table.secret), index('two_factor_user_idx').on(table.userId)])
+
+export const ssoProvider = sqliteTable('sso_provider', {
+  id: text('id').primaryKey(),
+  providerId: text('provider_id').notNull().unique(),
+  issuer: text('issuer').notNull(),
+  domain: text('domain').notNull(),
+  oidcConfig: text('oidc_config', { mode: 'json' }).$type<Record<string, JsonValue>>(),
+  samlConfig: text('saml_config', { mode: 'json' }).$type<Record<string, JsonValue>>(),
+  userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
+  domainVerified: integer('domain_verified', { mode: 'boolean' }).notNull().default(false),
+  createdAt: authDate('created_at').notNull(),
+  updatedAt: authDate('updated_at').notNull(),
+})
+
+export const invitations = sqliteTable('invitations', {
+  id: text('id').primaryKey(),
+  email: text('email').notNull(),
+  role: text('role', { enum: ['admin', 'member'] }).notNull(),
+  tokenHash: text('token_hash').notNull().unique(),
+  invitedBy: text('invited_by').notNull().references(() => users.id),
+  expiresAt: text('expires_at').notNull(),
+  createdAt: text('created_at').notNull(),
+  acceptedAt: text('accepted_at'),
+  revokedAt: text('revoked_at'),
+}, (table) => [index('invitations_email_idx').on(table.email), index('invitations_pending_idx').on(table.expiresAt, table.acceptedAt, table.revokedAt)])
+
+export const auditLog = sqliteTable('audit_log', {
+  id: text('id').primaryKey(),
+  at: text('at').notNull(),
+  actorUserId: text('actor_user_id').references(() => users.id, { onDelete: 'set null' }),
+  actorIp: text('actor_ip').notNull(),
+  event: text('event').notNull(),
+  targetType: text('target_type').notNull(),
+  targetId: text('target_id').notNull(),
+  metadata: text('metadata', { mode: 'json' }).$type<Record<string, JsonValue>>().notNull(),
+}, (table) => [index('audit_log_at_idx').on(table.at, table.id), index('audit_log_actor_idx').on(table.actorUserId)])
 
 export const workspace = sqliteTable('workspace', {
   id: text('id').primaryKey(),

@@ -28,6 +28,7 @@
     "@openstaff/shared": "workspace:*",
     "@vercel/sandbox": "3.3.0",
     "ai": "^7.0.99",
+    "better-auth": "^1.7.5",
     "croner": "^10.0.1",
     "dockerode": "^5.0.1",
     "dotenv": "^17.2.3",
@@ -37,7 +38,9 @@
     "freestyle-sandboxes": "0.1.46",
     "gray-matter": "^4.0.3",
     "hono": "^4.11.4",
+    "nodemailer": "^10.0.10",
     "playwright": "^1.63.0",
+    "resend": "^6.28.0",
     "undici": "^7.29.1",
     "ws": "^8.18.3",
     "zod": "^4.1.13"
