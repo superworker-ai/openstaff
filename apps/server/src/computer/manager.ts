@@ -1,5 +1,5 @@
 import { eq, inArray } from 'drizzle-orm'
-import { COMPUTER_PROVIDERS, type ComputerProviderId, type ComputerProviderInfo, type ComputerStatus, type DesktopInputAction, type StorageStatus } from '@openstaff/shared'
+import { COMPUTER_PROVIDERS, type ComputerProviderId, type ComputerProviderInfo, type ComputerStatus, type DesktopInputAction, type StorageStatus, type WorkspacePlan } from '@openstaff/shared'
 import type { Database } from '../db/index.js'
 import { computerInstances, turns, workspace } from '../db/schema.js'
 import type { Secrets } from '../secrets.js'
@@ -10,6 +10,8 @@ import type { Computer, DesktopEndpoints, ExecOptions, FileStat, ManagedComputer
 import type { ComputerLeaseSource } from './lease.js'
 import type { DurableWorkspace, ReconcileResult, StorageAttachment } from '../storage/durable.js'
 import type { RealtimeHub } from '../realtime/hub.js'
+import { checkComputerProviderPlan } from '../plan.js'
+import { closeComputerSession, closeUnresumedComputerSessions, openComputerSession, type ComputerSessionEndReason } from './sessions.js'
 
 function validProvider(value: string): value is ComputerProviderId { return (COMPUTER_PROVIDERS as readonly string[]).includes(value) }
 function instance(row: typeof computerInstances.$inferSelect): ComputerInstanceRecord { return { ...row, metadata: row.metadata } }
@@ -20,7 +22,7 @@ export class ComputerConflictError extends ComputerError {
 
 export class ComputerManager implements Computer {
   readonly root = '/workspace'
-  private active?: { id: ComputerProviderId; computer: ManagedComputer; materialized: Set<string> }
+  private active?: { id: ComputerProviderId; computer: ManagedComputer; materialized: Set<string>; externalId?: string }
   private readonly credentials: ComputerCredentials
   private activeTurns = 0
   private operations = 0
@@ -33,7 +35,8 @@ export class ComputerManager implements Computer {
   private unsubscribeLease?: () => void
   private hub?: Pick<RealtimeHub, 'broadcastAll'>
   private syncFlight?: Promise<ReconcileResult>
-  constructor(private readonly workspaceRoot: string, private readonly db: Database, secrets: Secrets, private readonly durable?: DurableWorkspace) { this.credentials = new ComputerCredentials(db, secrets) }
+  private initialized = false
+  constructor(private readonly workspaceRoot: string, private readonly db: Database, secrets: Secrets, private readonly durable?: DurableWorkspace, private readonly plan: WorkspacePlan = 'self-hosted') { this.credentials = new ComputerCredentials(db, secrets) }
   setLease(lease: ComputerLeaseSource) {
     this.unsubscribeLease?.()
     this.lease = lease
@@ -46,10 +49,23 @@ export class ComputerManager implements Computer {
     })
   }
   setHub(hub: Pick<RealtimeHub, 'broadcastAll'>) { this.hub = hub }
-  async initialize(): Promise<void> { await this.resolve(); this.armIdle() }
+  async initialize(): Promise<void> {
+    const first = !this.initialized
+    this.initialized = true
+    try {
+      await this.resolve()
+      await this.ensureSession()
+      if (first) await closeUnresumedComputerSessions(this.db, this.active?.externalId ? { provider: this.active.id, externalId: this.active.externalId } : undefined)
+      this.armIdle()
+    } catch (error) {
+      if (first) await closeUnresumedComputerSessions(this.db)
+      throw error
+    }
+  }
   async driver(): Promise<ComputerProviderId> {
     const selected = process.env.COMPUTER_DRIVER || (await this.db.select({ computerDriver: workspace.computerDriver }).from(workspace).where(eq(workspace.id, 'workspace')).limit(1))[0]?.computerDriver || 'local'
     if (!validProvider(selected)) throw new Error(`COMPUTER_DRIVER must be one of ${COMPUTER_PROVIDERS.join(', ')}`)
+    if (selected === 'local' && this.plan !== 'self-hosted') throw new ComputerError('permanent', 'The local Computer is not available on this plan')
     return selected
   }
   async providerId(): Promise<ComputerProviderId> { return this.driver() }
@@ -76,13 +92,15 @@ export class ComputerManager implements Computer {
       currentStatus = patch.status || currentStatus
       const values = { id: recordId, provider: id, externalId: currentExternalId, status: currentStatus, createdAt: row?.createdAt ?? now, lastSeenAt: now, metadata: currentMetadata }
       await this.db.insert(computerInstances).values(values).onConflictDoUpdate({ target: computerInstances.provider, set: { externalId: values.externalId, status: values.status, lastSeenAt: now, metadata: values.metadata } })
+      if (values.externalId && values.externalId !== row?.externalId) await openComputerSession(this.db, id, values.externalId, now)
+      if (this.active?.id === id) this.active.externalId = values.externalId
     }
     const computer = await provider.open({ credentials: resolved.values, workspaceRoot: this.workspaceRoot, instanceId: recordId, instance: row ? instance(row) : null, persist })
     const attachment = { hostFiles: provider.capabilities.hostFiles, root: this.workspaceRoot }
     let materialized: Set<string>
     try { materialized = await this.durable?.materialize(computer, attachment) ?? new Set() }
     catch (error) { await computer.close().catch(() => undefined); throw error }
-    this.active = { id, computer, materialized }
+    this.active = { id, computer, materialized, externalId: currentExternalId || undefined }
     if (computer.notice) this.hub?.broadcastAll({ type: 'computer.notice', detail: computer.notice, ts: new Date().toISOString() })
     return computer
   }
@@ -113,20 +131,22 @@ export class ComputerManager implements Computer {
       return computer.desktopInput(action)
     })
   }
-  async restart() { this.statusCache = undefined; try { await this.use((computer) => computer.restart()) } finally { this.statusCache = undefined } }
-  async stop() {
+  async restart() { this.statusCache = undefined; try { await this.use((computer) => computer.restart()); await this.ensureSession() } finally { this.statusCache = undefined } }
+  private async stopFor(endReason: Extract<ComputerSessionEndReason, 'stopped' | 'idle'>) {
     this.cancelIdle(); this.statusCache = undefined
     if (!this.stopping) this.stopping = (this.active ? Promise.resolve(this.active.computer) : this.resolve()).then(async (computer) => {
       if (!computer.stop) throw new ComputerError('permanent', 'This Computer provider cannot stop instances')
       await computer.stop()
+      if (this.active?.externalId) await closeComputerSession(this.db, this.active.id, endReason)
       this.mayResume = true
     }).finally(() => { this.stopping = undefined; this.statusCache = undefined })
     await this.stopping
   }
+  async stop() { await this.stopFor('stopped') }
   async destroy() {
     this.cancelIdle(); await this.stopping
     const id = await this.driver(), computer = await this.resolve()
-    try { await computer.destroy(); await this.db.delete(computerInstances).where(eq(computerInstances.provider, id)); await this.release() }
+    try { await computer.destroy(); await closeComputerSession(this.db, id, 'destroyed'); await this.db.delete(computerInstances).where(eq(computerInstances.provider, id)); await this.release() }
     finally { this.statusCache = undefined }
   }
   async providers(): Promise<ComputerProviderInfo[]> {
@@ -137,6 +157,8 @@ export class ComputerManager implements Computer {
     }))
   }
   async setProvider(id: ComputerProviderId): Promise<void> {
+    const planLimit = checkComputerProviderPlan({ plan: this.plan }, id)
+    if (planLimit) throw planLimit
     if (process.env.COMPUTER_DRIVER) throw new ComputerError('permanent', 'COMPUTER_DRIVER locks the selected provider')
     const busy = await this.db.select({ id: turns.id }).from(turns).where(inArray(turns.status, ['running', 'waiting_approval'])).limit(1)
     if (busy.length || this.activeTurns) throw new ComputerConflictError()
@@ -156,6 +178,7 @@ export class ComputerManager implements Computer {
       if (resumed) this.statusCache = undefined
       const result = await fn(await this.resolve())
       this.mayResume = false
+      if (resumed) await this.ensureSession()
       return result
     } finally { this.operations -= 1; if (resumed) this.statusCache = undefined; this.armIdle() }
   }
@@ -171,7 +194,7 @@ export class ComputerManager implements Computer {
     this.cancelIdle()
     if (this.activeTurns || this.operations || !this.active?.computer.stop) return
     const minutes = Number(process.env.COMPUTER_IDLE_MINUTES ?? 30)
-    this.idleTimer = setTimeout(() => { void this.stop().catch(() => undefined) }, Math.max(1, Number.isFinite(minutes) ? minutes : 30) * 60_000)
+    this.idleTimer = setTimeout(() => { void this.stopFor('idle').catch(() => undefined) }, Math.max(1, Number.isFinite(minutes) ? minutes : 30) * 60_000)
     this.idleTimer.unref()
   }
   turnStarted() { this.activeTurns += 1; this.cancelIdle() }
@@ -199,6 +222,9 @@ export class ComputerManager implements Computer {
       return result
     })().finally(() => { this.syncFlight = undefined })
     return this.syncFlight
+  }
+  private async ensureSession(): Promise<void> {
+    if (this.active?.externalId) await openComputerSession(this.db, this.active.id, this.active.externalId)
   }
   private async release() {
     this.cancelIdle(); await this.opening; await this.stopping; await this.syncFlight

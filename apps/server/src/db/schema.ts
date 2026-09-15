@@ -93,7 +93,7 @@ export const turns = sqliteTable('turns', {
   finishedAt: text('finished_at'),
   handoffDepth: integer('handoff_depth').notNull().default(0),
   computerProvider: text('computer_provider', { enum: COMPUTER_PROVIDERS }),
-}, (table) => [index('turns_room_status_idx').on(table.roomId, table.status), index('turns_bot_status_idx').on(table.botId, table.status)])
+}, (table) => [index('turns_room_status_idx').on(table.roomId, table.status), index('turns_bot_status_idx').on(table.botId, table.status), index('turns_finished_idx').on(table.finishedAt)])
 
 export const computerCredentials = sqliteTable('computer_credentials', {
   provider: text('provider', { enum: COMPUTER_PROVIDERS }).primaryKey(),
@@ -111,6 +111,15 @@ export const computerInstances = sqliteTable('computer_instances', {
   lastSeenAt: text('last_seen_at').notNull(),
   metadata: text('metadata', { mode: 'json' }).$type<Record<string, JsonValue>>().notNull().default({}),
 })
+
+export const computerSessions = sqliteTable('computer_sessions', {
+  id: text('id').primaryKey(),
+  provider: text('provider', { enum: COMPUTER_PROVIDERS }).notNull(),
+  externalId: text('external_id').notNull(),
+  startedAt: text('started_at').notNull(),
+  endedAt: text('ended_at'),
+  endReason: text('end_reason'),
+}, (table) => [index('computer_sessions_provider_ended_idx').on(table.provider, table.endedAt)])
 
 export const computerLease = sqliteTable('computer_lease', {
   id: text('id').primaryKey().notNull().default('workspace'),
