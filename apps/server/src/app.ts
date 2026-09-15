@@ -2,13 +2,15 @@ import type { Server } from 'node:http'
 import './load-env.js'
 import { serve, type ServerType } from '@hono/node-server'
 import { Hono } from 'hono'
+import { PLAN_LIMITS } from '@openstaff/shared'
+import { eq, sql } from 'drizzle-orm'
 import { readConfig, type Config } from './config.js'
 import { createDatabase, type DatabaseHandle } from './db/index.js'
 import { ComputerManager } from './computer/manager.js'
 import { BrowserService } from './browser/service.js'
 import { RoomCompactor } from './agent/compaction.js'
 import { uploadRoutes } from './api/uploads.js'
-import { usageRoutes } from './api/usage.js'
+import { usageExportRoutes, usageRoutes } from './api/usage.js'
 import { screenRoutes } from './api/screens.js'
 import { RealtimeHub } from './realtime/hub.js'
 import { AdmissionService } from './rooms/admission.js'
@@ -22,7 +24,7 @@ import { roomRoutes } from './api/rooms.js'
 import { approvalRoutes, turnRoutes } from './api/turns.js'
 import { taskRoutes } from './api/tasks.js'
 import { workspaceRoutes } from './api/workspace.js'
-import { users } from './db/schema.js'
+import { users, workspace } from './db/schema.js'
 import type { ApiDependencies, AppEnv } from './api/context.js'
 import { KeyStore, Secrets } from './secrets.js'
 import { PluginRegistry } from './plugins/registry.js'
@@ -39,10 +41,10 @@ import { roomConnectionRoutes } from './api/room-connect.js'
 import { ConnectionHealth } from './plugins/connection-health.js'
 import { computerRoutes } from './api/computer.js'
 import { computerDesktopRoutes } from './api/computer-desktop.js'
-import { sql } from 'drizzle-orm'
 import { ComputerLeaseService } from './computer/lease.js'
 import { createWorkspaceStore, type WorkspaceStore } from './storage/index.js'
 import { DurableWorkspace } from './storage/durable.js'
+import { suspendedGate } from './suspended.js'
 
 export interface CreateApplicationOptions {
   composioClient?: ComposioClient
@@ -66,15 +68,20 @@ export async function createApplication(options: CreateApplicationOptions = {}):
   const secrets = await Secrets.open(config.dataDir)
   const store = options.workspaceStore ?? createWorkspaceStore(config.dataDir)
   const durable = new DurableWorkspace(store, database.db)
-  const computer = new ComputerManager(`${config.dataDir}/workspace`, database.db, secrets, durable)
-  const hub = new RealtimeHub(database.db, () => computer.desktop(), config.publicAppUrl)
+  const computer = new ComputerManager(`${config.dataDir}/workspace`, database.db, secrets, durable, config.plan)
+  const hub = new RealtimeHub(database.db, () => computer.desktop(), config.publicAppUrl, config.state)
   computer.setHub(hub)
-  await computer.initialize()
+  try { await computer.initialize() }
+  catch (error) {
+    const stored = (await database.db.select({ computerDriver: workspace.computerDriver }).from(workspace).where(eq(workspace.id, 'workspace')).limit(1))[0]?.computerDriver
+    if (config.plan !== 'self-hosted' && stored === 'local' && error instanceof Error && error.message === 'The local Computer is not available on this plan') console.warn('The stored local Computer is not available on this hosted plan; select a hosted provider in Settings')
+    else throw error
+  }
   const lease = new ComputerLeaseService(database.db, hub)
   computer.setLease(lease)
   hub.setLease(lease)
   const admission = new AdmissionService(database.db, hub)
-  const keys = new KeyStore(database.db, secrets)
+  const keys = new KeyStore(database.db, secrets, config.managedKeys)
   await keys.load()
   const registry = new PluginRegistry(database.db, secrets, config.publicAppUrl)
   await registry.rebuild()
@@ -103,8 +110,11 @@ export async function createApplication(options: CreateApplicationOptions = {}):
   app.get('/api/ready', async (context) => {
     try { await database.db.run(sql`SELECT 1`); return context.json({ ok: true }) } catch { return context.json({ ok: false }, 503) }
   })
+  app.get('/api/plan', (context) => context.json({ plan: config.plan, state: config.state, managedKeys: config.managedKeys, billingUrl: config.billingUrl ?? null, limits: PLAN_LIMITS[config.plan] }))
   app.route('/api/auth', authRoutes(dependencies))
+  app.use('/api/*', suspendedGate(config.state))
   app.route('/api/hooks', hookRoutes(dependencies))
+  app.route('/api/usage/export', usageExportRoutes(dependencies))
   app.use('/api/*', requireAuth(database.db))
   app.route('/api/bots', botRoutes(dependencies))
   app.route('/api/rooms', uploadRoutes(dependencies))

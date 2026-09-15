@@ -6,6 +6,7 @@ import { ComputerConflictError } from '../computer/manager.js'
 import { LeaseError } from '../computer/lease.js'
 import type { ApiDependencies, AppEnv } from './context.js'
 import { isResponse, parseBody } from './helpers.js'
+import { PlanLimitError } from '../plan.js'
 
 const providerSchema = z.enum(COMPUTER_PROVIDERS)
 const credentialsSchema = z.object({ values: z.record(z.string(), z.string()) }).strict()
@@ -55,7 +56,7 @@ export function computerRoutes({ computer, lease }: Pick<ApiDependencies, 'compu
     if (!owner(c)) return c.json({ error: 'Workspace owner required' }, 403)
     const input = await parseBody(c, z.object({ id: providerSchema }))
     if (isResponse(input)) return input
-    try { await computer.setProvider(input.id); return c.json(await computer.status()) } catch (error) { return c.json({ error: message(error) }, error instanceof ComputerConflictError ? 409 : 400) }
+    try { await computer.setProvider(input.id); return c.json(await computer.status()) } catch (error) { return error instanceof PlanLimitError ? c.json(error.body(), 402) : c.json({ error: message(error) }, error instanceof ComputerConflictError ? 409 : 400) }
   })
   app.put('/providers/:id/credentials', async (c) => {
     if (!owner(c)) return c.json({ error: 'Workspace owner required' }, 403)

@@ -2,7 +2,7 @@ import type { IncomingMessage } from 'node:http'
 import { and, eq, gt } from 'drizzle-orm'
 import type { Server as HttpServer } from 'node:http'
 import WebSocket, { WebSocketServer } from 'ws'
-import { clientWireMessageSchema, SESSION_COOKIE, type ComputerLease, type ServerWireMessage, type User } from '@openstaff/shared'
+import { clientWireMessageSchema, SESSION_COOKIE, type ComputerLease, type ServerWireMessage, type User, type WorkspaceState } from '@openstaff/shared'
 import type { Database } from '../db/index.js'
 import { roomMembers, sessions, users } from '../db/schema.js'
 import { publicUser } from '../auth/session.js'
@@ -33,7 +33,7 @@ export class RealtimeHub {
   private lease?: ComputerLeaseSource
   private unsubscribeLease?: () => void
 
-  constructor(private readonly db: Database, private readonly desktop?: () => Promise<DesktopEndpoints | null>, private readonly publicAppUrl?: string) {}
+  constructor(private readonly db: Database, private readonly desktop?: () => Promise<DesktopEndpoints | null>, private readonly publicAppUrl?: string, private readonly workspaceState: WorkspaceState = 'active') {}
 
   setLease(lease: ComputerLeaseSource): void {
     this.unsubscribeLease?.()
@@ -50,6 +50,7 @@ export class RealtimeHub {
   attach(server: HttpServer): void {
     server.on('upgrade', async (request, socket, head) => {
       const url = new URL(request.url ?? '/', 'http://localhost')
+      if (this.workspaceState === 'suspended' && (url.pathname === '/ws' || url.pathname.startsWith('/api/'))) return this.rejectUpgrade(socket, 402, 'Workspace suspended', 'suspended')
       if (url.pathname === DESKTOP_PREFIX || url.pathname.startsWith(`${DESKTOP_PREFIX}/`)) {
         await this.upgradeDesktop(request, socket, head)
         return
@@ -79,8 +80,9 @@ export class RealtimeHub {
     return `${protocol}://${host}`
   }
 
-  private rejectUpgrade(socket: import('node:stream').Duplex, status: 401 | 403 | 409 | 429 | 503, reason: string) {
-    socket.write(`HTTP/1.1 ${status} ${reason}\r\nConnection: close\r\nContent-Type: application/json\r\n\r\n${JSON.stringify({ error: reason })}`)
+  private rejectUpgrade(socket: import('node:stream').Duplex, status: 401 | 402 | 403 | 409 | 429 | 503, reason: string, code?: string) {
+    const statusText = status === 402 ? 'Payment Required' : reason
+    socket.write(`HTTP/1.1 ${status} ${statusText}\r\nConnection: close\r\nContent-Type: application/json\r\n\r\n${JSON.stringify({ error: reason, ...(code ? { code } : {}) })}`)
     socket.destroy()
   }
 

@@ -7,6 +7,7 @@ import { hashPassword, verifyPassword } from '../auth/password.js'
 import { users } from '../db/schema.js'
 import type { ApiDependencies } from './context.js'
 import { isResponse, parseBody } from './helpers.js'
+import { checkMemberPlan } from '../plan.js'
 
 const credentialsSchema = z.object({
   email: z.email().transform((value) => value.trim().toLowerCase()),
@@ -23,6 +24,8 @@ export function authRoutes({ db, config }: ApiDependencies): Hono<{ Variables: A
     const suppliedCode = context.req.header('x-signup-code') ?? input.signupCode
     if (config.signupCode && suppliedCode !== config.signupCode) return context.json({ error: 'Invalid signup code' }, 403)
     if ((await db.select().from(users).where(eq(users.email, input.email)).limit(1))[0]) return context.json({ error: 'Email already registered' }, 409)
+    const limit = await checkMemberPlan(db, config)
+    if (limit) return context.json(limit.body(), 402)
     const total = (await db.select({ value: count() }).from(users))[0]?.value ?? 0
     const row: typeof users.$inferInsert = {
       id: createId('user'), email: input.email, name: input.name, passwordHash: await hashPassword(input.password),
