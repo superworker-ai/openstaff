@@ -1,9 +1,9 @@
 import { createFileRoute, Link, redirect } from '@tanstack/react-router'
 import { createServerFn } from '@tanstack/react-start'
-import { Bot, ChartBar, Clock, Cpu, KeyRound, Monitor, Plug, Puzzle, UserRoundCog, type LucideIcon } from 'lucide-react'
+import { Bot, ChartBar, Clock, Cpu, KeyRound, Monitor, Plug, Puzzle, ShieldCheck, UserRoundCog, type LucideIcon } from 'lucide-react'
 import { Fragment, type ReactNode } from 'react'
 import type { User } from '@openstaff/shared'
-import { serverApi } from '../lib/server-api'
+import { authRedirect, serverApi } from '../lib/server-api'
 import { loadMe } from '../lib/loaders'
 import { Providers } from '../components/settings/Providers'
 import { Models, type WorkspaceSettings } from '../components/settings/Models'
@@ -14,15 +14,17 @@ import { Bots } from '../components/settings/Bots'
 import { Automations } from '../components/settings/Automations'
 import { Usage } from '../components/settings/Usage'
 import { Members } from '../components/settings/Members'
+import { Security } from '../components/settings/Security'
 
 const loadWorkspace = createServerFn({ method: 'GET' }).handler(() => serverApi<{ workspace: WorkspaceSettings }>('/api/workspace'))
-const settingsSectionIds = ['providers', 'models', 'usage', 'plugins', 'connections', 'automations', 'computer', 'members', 'bots'] as const
+const settingsSectionIds = ['providers', 'models', 'security', 'usage', 'plugins', 'connections', 'automations', 'computer', 'members', 'bots'] as const
 type SettingsSection = typeof settingsSectionIds[number]
 type SettingsRenderProps = { workspace: WorkspaceSettings; user: User }
 type SettingsEntry = { id: SettingsSection; label: string; icon: LucideIcon; group: 'Workspace' | 'Integrations' | 'Runtime' | 'Team'; ownerOnly?: boolean; administratorOnly?: boolean; render: (props: SettingsRenderProps) => ReactNode }
 const settingsSections: readonly SettingsEntry[] = [
   { id: 'providers', label: 'Providers', icon: KeyRound, group: 'Workspace', render: ({ user }: SettingsRenderProps) => <Providers owner={user.role === 'owner'} /> },
   { id: 'models', label: 'Models', icon: Cpu, group: 'Workspace', render: ({ workspace }: SettingsRenderProps) => <Models initial={workspace} /> },
+  { id: 'security', label: 'Security', icon: ShieldCheck, group: 'Workspace', administratorOnly: true, render: ({ user }: SettingsRenderProps) => <Security user={user} /> },
   { id: 'usage', label: 'Usage', icon: ChartBar, group: 'Workspace', ownerOnly: true, render: () => <Usage /> },
   { id: 'plugins', label: 'Plugins', icon: Puzzle, group: 'Integrations', render: ({ user }: SettingsRenderProps) => <Plugins owner={user.role === 'owner'} /> },
   { id: 'connections', label: 'Connections', icon: Plug, group: 'Integrations', render: () => <Connections /> },
@@ -34,7 +36,7 @@ const settingsSections: readonly SettingsEntry[] = [
 const isSettingsSection = (value: unknown): value is SettingsSection => typeof value === 'string' && settingsSectionIds.some((id) => id === value)
 export const Route = createFileRoute('/settings')({
   validateSearch: (search: Record<string, unknown>): { connected?: string; error?: string; section?: SettingsSection } => ({ connected: typeof search.connected === 'string' ? search.connected : undefined, error: typeof search.error === 'string' ? search.error : undefined, section: isSettingsSection(search.section) ? search.section : undefined }),
-  loader: async () => { try { const [settings, me] = await Promise.all([loadWorkspace(), loadMe()]); return { ...settings, user: me.user } } catch { throw redirect({ to: '/login' }) } },
+  loader: async () => { try { const [settings, me] = await Promise.all([loadWorkspace(), loadMe()]); return { ...settings, user: me.user } } catch (reason) { throw redirect({ to: authRedirect(reason) }) } },
   component: SettingsPage,
 })
 function SettingsPage() {
