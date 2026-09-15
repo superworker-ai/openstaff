@@ -4,18 +4,18 @@ import type { Config } from './config.js'
 import type { Database } from './db/index.js'
 import { automations, bots, users } from './db/schema.js'
 
-export type PlanLimitName = 'bots' | 'members' | 'automations' | 'computer_provider'
-export type PlanLimitMaximum = number | readonly ComputerProviderId[]
+export type PlanLimitName = 'bots' | 'members' | 'automations' | 'computer_provider' | 'sso'
+export type PlanLimitMaximum = number | boolean | readonly ComputerProviderId[]
 
 export class PlanLimitError extends Error {
   readonly code = 'plan_limit' as const
   constructor(readonly limit: PlanLimitName, readonly plan: WorkspacePlan, readonly max: PlanLimitMaximum) {
-    super(limit === 'computer_provider' ? `Computer provider is not available on the ${plan} plan` : `The ${plan} plan limit for ${limit} has been reached`)
+    super(limit === 'computer_provider' ? `Computer provider is not available on the ${plan} plan` : limit === 'sso' ? `Single sign-on is not available on the ${plan} plan` : `The ${plan} plan limit for ${limit} has been reached`)
   }
   body() { return { error: this.message, code: this.code, limit: this.limit, plan: this.plan, max: this.max } }
 }
 
-async function countedLimit(db: Database, table: typeof bots | typeof users | typeof automations, config: Config, limit: Exclude<PlanLimitName, 'computer_provider'>, max: number | null): Promise<PlanLimitError | undefined> {
+async function countedLimit(db: Database, table: typeof bots | typeof users | typeof automations, config: Config, limit: Exclude<PlanLimitName, 'computer_provider' | 'sso'>, max: number | null): Promise<PlanLimitError | undefined> {
   if (max === null) return
   const total = (await db.select({ value: count() }).from(table))[0]?.value ?? 0
   if (total >= max) return new PlanLimitError(limit, config.plan, max)

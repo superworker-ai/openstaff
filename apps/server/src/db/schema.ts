@@ -75,12 +75,11 @@ export const ssoProvider = sqliteTable('sso_provider', {
   providerId: text('provider_id').notNull().unique(),
   issuer: text('issuer').notNull(),
   domain: text('domain').notNull(),
-  oidcConfig: text('oidc_config', { mode: 'json' }).$type<Record<string, JsonValue>>(),
-  samlConfig: text('saml_config', { mode: 'json' }).$type<Record<string, JsonValue>>(),
+  oidcConfig: text('oidc_config'),
+  samlConfig: text('saml_config'),
   userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
+  organizationId: text('organization_id'),
   domainVerified: integer('domain_verified', { mode: 'boolean' }).notNull().default(false),
-  createdAt: authDate('created_at').notNull(),
-  updatedAt: authDate('updated_at').notNull(),
 })
 
 export const invitations = sqliteTable('invitations', {

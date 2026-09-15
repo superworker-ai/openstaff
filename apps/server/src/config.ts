@@ -18,6 +18,11 @@ export interface Config {
     smtpUrl?: string
     resendApiKey?: string
   }
+  social: {
+    google?: { clientId: string; clientSecret: string }
+    github?: { clientId: string; clientSecret: string }
+    microsoft?: { clientId: string; clientSecret: string; tenantId: string }
+  }
   plan: WorkspacePlan
   state: WorkspaceState
   managedKeys: boolean
@@ -41,6 +46,10 @@ export function readConfig(overrides: Partial<Config> = {}): Config {
   if (plan !== 'self-hosted' && process.env.COMPUTER_DRIVER === 'local') throw new Error('COMPUTER_DRIVER=local is not allowed on hosted plans')
   const publicAppUrl = overrides.publicAppUrl ?? process.env.PUBLIC_APP_URL
   const trustedOrigins = overrides.trustedOrigins ?? [...new Set([publicAppUrl, ...(process.env.AUTH_TRUSTED_ORIGINS ?? '').split(',').map((value) => value.trim())].filter((value): value is string => Boolean(value)))]
+  const pair = (clientId: string | undefined, clientSecret: string | undefined) => clientId && clientSecret ? { clientId, clientSecret } : undefined
+  const google = overrides.social?.google ?? pair(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET)
+  const github = overrides.social?.github ?? pair(process.env.GITHUB_CLIENT_ID, process.env.GITHUB_CLIENT_SECRET)
+  const microsoft = overrides.social?.microsoft ?? (process.env.MICROSOFT_CLIENT_ID && process.env.MICROSOFT_CLIENT_SECRET ? { clientId: process.env.MICROSOFT_CLIENT_ID, clientSecret: process.env.MICROSOFT_CLIENT_SECRET, tenantId: process.env.MICROSOFT_TENANT_ID || 'common' } : undefined)
   return {
     dataDir: path.isAbsolute(configuredDataDir) ? configuredDataDir : path.resolve(import.meta.dirname, '../../..', configuredDataDir),
     port: overrides.port ?? Number(process.env.SERVER_PORT ?? 8787),
@@ -57,6 +66,11 @@ export function readConfig(overrides: Partial<Config> = {}): Config {
       from: emailFrom,
       smtpUrl: overrides.email?.smtpUrl ?? (process.env.SMTP_URL || undefined),
       resendApiKey: overrides.email?.resendApiKey ?? (process.env.RESEND_API_KEY || undefined),
+    },
+    social: {
+      ...(google ? { google } : {}),
+      ...(github ? { github } : {}),
+      ...(microsoft ? { microsoft } : {}),
     },
     plan: plan as WorkspacePlan,
     state: state as WorkspaceState,

@@ -20,6 +20,7 @@
     "@ai-sdk/openai": "^3.0.35",
     "@ai-sdk/xai": "^3.0.54",
     "@aws-sdk/client-s3": "^3.1131.0",
+    "@better-auth/sso": "1.7.5",
     "@composio/core": "^0.18.1",
     "@daytonaio/sdk": "0.211.2",
     "@e2b/desktop": "2.4.0",

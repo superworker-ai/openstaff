@@ -11,6 +11,7 @@ export interface PlanLimits {
   maxAutomations: number | null
   computerProviders: 'all' | readonly ComputerProviderId[]
   includedCreditsUsd: number
+  sso: boolean
 }
 
 export const STARTER_MAX_BOTS = 3
@@ -25,10 +26,10 @@ export const BUSINESS_INCLUDED_CREDITS_USD = 100
 export const HOSTED_COMPUTER_PROVIDERS = COMPUTER_PROVIDERS.filter((provider): provider is Exclude<ComputerProviderId, 'local'> => provider !== 'local')
 
 export const PLAN_LIMITS: Record<WorkspacePlan, PlanLimits> = {
-  'self-hosted': { maxBots: null, maxMembers: null, maxAutomations: null, computerProviders: 'all', includedCreditsUsd: 0 },
-  starter: { maxBots: STARTER_MAX_BOTS, maxMembers: STARTER_MAX_MEMBERS, maxAutomations: STARTER_MAX_AUTOMATIONS, computerProviders: HOSTED_COMPUTER_PROVIDERS, includedCreditsUsd: 0 },
-  team: { maxBots: TEAM_MAX_BOTS, maxMembers: TEAM_MAX_MEMBERS, maxAutomations: TEAM_MAX_AUTOMATIONS, computerProviders: HOSTED_COMPUTER_PROVIDERS, includedCreditsUsd: TEAM_INCLUDED_CREDITS_USD },
-  business: { maxBots: null, maxMembers: BUSINESS_MAX_MEMBERS, maxAutomations: null, computerProviders: HOSTED_COMPUTER_PROVIDERS, includedCreditsUsd: BUSINESS_INCLUDED_CREDITS_USD },
+  'self-hosted': { maxBots: null, maxMembers: null, maxAutomations: null, computerProviders: 'all', includedCreditsUsd: 0, sso: true },
+  starter: { maxBots: STARTER_MAX_BOTS, maxMembers: STARTER_MAX_MEMBERS, maxAutomations: STARTER_MAX_AUTOMATIONS, computerProviders: HOSTED_COMPUTER_PROVIDERS, includedCreditsUsd: 0, sso: false },
+  team: { maxBots: TEAM_MAX_BOTS, maxMembers: TEAM_MAX_MEMBERS, maxAutomations: TEAM_MAX_AUTOMATIONS, computerProviders: HOSTED_COMPUTER_PROVIDERS, includedCreditsUsd: TEAM_INCLUDED_CREDITS_USD, sso: false },
+  business: { maxBots: null, maxMembers: BUSINESS_MAX_MEMBERS, maxAutomations: null, computerProviders: HOSTED_COMPUTER_PROVIDERS, includedCreditsUsd: BUSINESS_INCLUDED_CREDITS_USD, sso: true },
 }
 
 export interface WorkspacePlanDetails {
