@@ -17,6 +17,28 @@ stdout. For a private deployment, set `AUTH_SIGNUP` to `code` with `SIGNUP_CODE`
 `RESEND_API_KEY`; both require `EMAIL_FROM`. Set `AUTH_TRUSTED_ORIGINS` when browsers use
 origins beyond `PUBLIC_APP_URL`.
 
+### Single sign-on
+
+The owner or a workspace administrator can add a SAML or OpenID Connect provider in
+Settings → Security. For SAML, copy the displayed SP metadata URL, ACS URL, and entity ID
+into the identity provider. Then paste the IdP metadata XML back into OpenStaff, or enter
+the IdP sign-in endpoint and signing certificate separately. OpenID Connect needs the
+issuer, client ID, client secret, and, when discovery is not at the standard issuer URL,
+the discovery URL. Multiple email domains can be entered as a comma-separated list.
+
+Self-hosted installations do not require DNS domain verification. Hosted installations
+show the exact TXT record in Settings; sign-in remains unavailable until it verifies.
+Set `PUBLIC_APP_URL` to the externally reachable HTTPS origin before exchanging metadata,
+because it determines every callback URL.
+
+### Two-factor
+
+Users manage authenticator-based two-factor authentication from Your security. Setup
+returns an authenticator URI and one-time backup codes; save those codes before leaving
+the page. Trusted devices last 30 days. Owners can require enrolment for password and
+magic-link accounts in Settings → Security. Social and SSO accounts are exempt because
+their identity provider is responsible for multi-factor authentication.
+
 1. Install Docker Engine with Compose v2 and point a DNS name at the VM.
 2. Copy `.env.example` to `.env`. Set `PUBLIC_HOST`, an HTTPS `PUBLIC_APP_URL`, a
    random 32-byte `SECRETS_KEY`, and one model key. Configure E2B, Daytona, Freestyle, or Vercel Sandbox only if
