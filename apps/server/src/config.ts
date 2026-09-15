@@ -12,6 +12,7 @@ export interface Config {
   plan: WorkspacePlan
   state: WorkspaceState
   managedKeys: boolean
+  composioUserId: string
   controlPlaneToken?: string
   billingUrl?: string
 }
@@ -34,6 +35,7 @@ export function readConfig(overrides: Partial<Config> = {}): Config {
     plan: plan as WorkspacePlan,
     state: state as WorkspaceState,
     managedKeys: overrides.managedKeys ?? ['1', 'true'].includes((process.env.MANAGED_KEYS ?? '').toLowerCase()),
+    composioUserId: (overrides.composioUserId ?? process.env.COMPOSIO_USER_ID ?? '').trim() || 'workspace',
     controlPlaneToken: overrides.controlPlaneToken !== undefined ? overrides.controlPlaneToken || undefined : process.env.CONTROL_PLANE_TOKEN || undefined,
     billingUrl: overrides.billingUrl !== undefined ? overrides.billingUrl || undefined : process.env.PUBLIC_BILLING_URL || undefined,
   }

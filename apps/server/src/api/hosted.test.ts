@@ -69,6 +69,29 @@ it('returns starter plan-limit responses at all four write paths', async () => {
   expect(await managed.json()).toMatchObject({ code: 'managed_keys' })
 })
 
+it('rejects managed provider and Computer credential writes and reports managed sandboxes', async () => {
+  vi.stubEnv('COMPUTER_DRIVER', '')
+  vi.stubEnv('E2B_API_KEY', 'host-e2b-key')
+  const running = await application({ managedKeys: true })
+  const { cookie } = await signup(running)
+  const headers = { cookie, 'content-type': 'application/json' }
+  const providerKey = await running.app.request('/api/workspace/provider-keys', { method: 'PUT', headers, body: JSON.stringify({ composio: 'x' }) })
+  expect(providerKey.status).toBe(403)
+  expect(await providerKey.json()).toMatchObject({ code: 'managed_keys' })
+  for (const [method, url, body] of [
+    ['PUT', '/api/computer/providers/e2b/credentials', { values: { apiKey: 'x' } }],
+    ['DELETE', '/api/computer/providers/e2b/credentials', undefined],
+    ['POST', '/api/computer/providers/e2b/test', { values: { apiKey: 'x' } }],
+  ] as const) {
+    const response = await running.app.request(url, { method, headers, ...(body ? { body: JSON.stringify(body) } : {}) })
+    expect(response.status).toBe(403)
+    expect(await response.json()).toMatchObject({ code: 'managed_keys' })
+  }
+  const providers = await (await running.app.request('/api/computer/providers', { headers: { cookie } })).json() as { providers: Array<{ id: string; managed: boolean }> }
+  expect(providers.providers).toContainEqual(expect.objectContaining({ id: 'e2b', managed: true }))
+  expect(providers.providers).toContainEqual(expect.objectContaining({ id: 'local', managed: false }))
+})
+
 it('keeps all four write paths unrestricted on the default self-hosted plan', async () => {
   vi.stubEnv('COMPUTER_DRIVER', '')
   vi.spyOn(console, 'warn').mockImplementation(() => {})

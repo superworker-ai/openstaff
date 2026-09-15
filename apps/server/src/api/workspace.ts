@@ -7,7 +7,7 @@ import { availableApps } from '../agent/app-catalog.js'
 import type { AppEnv, ApiDependencies } from './context.js'
 import { isResponse, parseBody } from './helpers.js'
 import { PlanLimitError } from '../plan.js'
-import { MANAGED_MODEL_PROVIDERS } from '../secrets.js'
+import { MANAGED_PROVIDERS } from '../secrets.js'
 
 export function workspaceRoutes({ db, keys, registry, composio, computer, config }: ApiDependencies): Hono<AppEnv> {
   const app = new Hono<AppEnv>()
@@ -23,7 +23,7 @@ export function workspaceRoutes({ db, keys, registry, composio, computer, config
     if (c.get('user').role !== 'owner') return c.json({ error: 'Workspace owner required' }, 403)
     const input = await parseBody(c, z.object({ xai: z.string().optional(), anthropic: z.string().optional(), openai: z.string().optional(), composio: z.string().optional(), aiGateway: z.string().optional() }).strict())
     if (isResponse(input)) return input
-    if (config.managedKeys && MANAGED_MODEL_PROVIDERS.some((provider) => input[provider] !== undefined)) return c.json({ error: 'Model keys are managed by your host', code: 'managed_keys' }, 403)
+    if (config.managedKeys && MANAGED_PROVIDERS.some((provider) => input[provider] !== undefined)) return c.json({ error: 'Model and Composio keys are managed by your host', code: 'managed_keys' }, 403)
     await keys.set(input)
     if (input.composio !== undefined) composio.refreshCatalog()
     return c.json({ configured: keys.configured() })

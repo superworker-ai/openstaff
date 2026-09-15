@@ -7,8 +7,8 @@ describe('hosted configuration', () => {
   it('is inert by default and accepts explicit overrides', () => {
     vi.stubEnv('WORKSPACE_PLAN', '')
     vi.stubEnv('WORKSPACE_STATE', '')
-    expect(readConfig()).toMatchObject({ plan: 'self-hosted', state: 'active', managedKeys: false })
-    expect(readConfig({ plan: 'team', state: 'past_due', managedKeys: true, billingUrl: 'https://billing.example' })).toMatchObject({ plan: 'team', state: 'past_due', managedKeys: true, billingUrl: 'https://billing.example' })
+    expect(readConfig()).toMatchObject({ plan: 'self-hosted', state: 'active', managedKeys: false, composioUserId: 'workspace' })
+    expect(readConfig({ plan: 'team', state: 'past_due', managedKeys: true, composioUserId: ' tenant-slug ', billingUrl: 'https://billing.example' })).toMatchObject({ plan: 'team', state: 'past_due', managedKeys: true, composioUserId: 'tenant-slug', billingUrl: 'https://billing.example' })
   })
 
   it.each([

@@ -30,21 +30,22 @@ it('authenticates encrypted values, persists keys, and falls back to environment
   } finally { vi.unstubAllEnvs(); await f.close() }
 })
 
-it('uses only environment model keys in managed mode and leaves other providers unchanged', async () => {
+it('uses only environment provider keys in managed mode', async () => {
   const f = await fixture()
   try {
     vi.stubEnv('XAI_API_KEY', 'managed-environment')
-    vi.stubEnv('COMPOSIO_API_KEY', '')
+    vi.stubEnv('COMPOSIO_API_KEY', 'managed-composio-environment')
     const secrets = await Secrets.open(f.directory)
     const stored = new KeyStore(f.db, secrets)
     await stored.set({ xai: 'saved-model-key', composio: 'saved-composio-key' })
     const managed = new KeyStore(f.db, secrets, true)
     await managed.load()
     expect(managed.get('xai')).toBe('managed-environment')
-    expect(managed.get('composio')).toBe('saved-composio-key')
+    expect(managed.get('composio')).toBe('managed-composio-environment')
     expect(managed.configured()).toMatchObject({ xai: true, anthropic: false, openai: false, aiGateway: false, composio: true })
     vi.stubEnv('XAI_API_KEY', '')
+    vi.stubEnv('COMPOSIO_API_KEY', '')
     expect(managed.get('xai')).toBeUndefined()
-    expect(managed.configured().xai).toBe(false)
+    expect(managed.configured()).toMatchObject({ xai: false, composio: false })
   } finally { vi.unstubAllEnvs(); await f.close() }
 })

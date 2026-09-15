@@ -32,7 +32,7 @@ class WorkspaceComposio extends Composio {
     return rows
   }
 }
-export function createComposioClient(apiKey: string, dataDir: string): ComposioClient {
+export function createComposioClient(apiKey: string, dataDir: string, userId: string): ComposioClient {
   const sdk = new WorkspaceComposio({ apiKey, allowTracking: false, fileUploadDirs: false, fileDownloadDir: `${dataDir}/downloads` })
   const request = () => ({ signal: AbortSignal.timeout(20_000) })
   const normalize = (tool: { slug: string; description?: string; toolkit?: { slug: string }; tags?: string[]; version?: string }): ComposioTool => ({ slug: tool.slug, toolkit: tool.toolkit?.slug ?? tool.slug.split('_')[0]!.toLowerCase(), description: tool.description ?? '', tags: tool.tags, version: tool.version })
@@ -41,7 +41,7 @@ export function createComposioClient(apiKey: string, dataDir: string): ComposioC
       const result: ComposioConnection[] = []
       let cursor: string | undefined
       do {
-        const page = await sdk.connectedAccounts.list({ userIds: ['workspace'], limit: 100, cursor }, request())
+        const page = await sdk.connectedAccounts.list({ userIds: [userId], limit: 100, cursor }, request())
         result.push(...page.items.map((account) => ({ id: account.id, toolkit: account.toolkit.slug, status: account.isDisabled ? 'DISABLED' : account.status, createdAt: account.createdAt })))
         cursor = page.nextCursor ?? undefined
       } while (cursor)
@@ -50,12 +50,12 @@ export function createComposioClient(apiKey: string, dataDir: string): ComposioC
     async search(query, toolkits) { return (await sdk.tools.getRawComposioTools(toolkits ? { search: query, toolkits, limit: 10 } : { search: query }, undefined, request())).slice(0, 10).map(normalize) },
     async metadata(slug) { return normalize(await sdk.tools.getRawComposioToolBySlug(slug, undefined, request())) },
     async execute(slug, args, version) {
-      return sdk.tools.execute(slug, { userId: 'workspace', arguments: args, ...(version ? { version } : { dangerouslySkipVersionCheck: true }) }, request())
+      return sdk.tools.execute(slug, { userId, arguments: args, ...(version ? { version } : { dangerouslySkipVersionCheck: true }) }, request())
     },
     async link(toolkit, callbackUrl) {
       const configs = await sdk.authConfigs.list({ toolkit, showDisabled: false }, request())
       const auth = configs.items[0] ?? await sdk.authConfigs.create(toolkit, { type: 'use_composio_managed_auth' }, request())
-      const result = await sdk.connectedAccounts.link('workspace', auth.id, { callbackUrl }, request())
+      const result = await sdk.connectedAccounts.link(userId, auth.id, { callbackUrl }, request())
       if (!result.redirectUrl) throw new Error('Composio did not provide a connection URL')
       return { redirectUrl: result.redirectUrl }
     },

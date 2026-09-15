@@ -36,7 +36,7 @@ export class ComputerManager implements Computer {
   private hub?: Pick<RealtimeHub, 'broadcastAll'>
   private syncFlight?: Promise<ReconcileResult>
   private initialized = false
-  constructor(private readonly workspaceRoot: string, private readonly db: Database, secrets: Secrets, private readonly durable?: DurableWorkspace, private readonly plan: WorkspacePlan = 'self-hosted') { this.credentials = new ComputerCredentials(db, secrets) }
+  constructor(private readonly workspaceRoot: string, private readonly db: Database, secrets: Secrets, private readonly durable?: DurableWorkspace, private readonly plan: WorkspacePlan = 'self-hosted', managedKeys = false) { this.credentials = new ComputerCredentials(db, secrets, managedKeys) }
   setLease(lease: ComputerLeaseSource) {
     this.unsubscribeLease?.()
     this.lease = lease
@@ -153,7 +153,7 @@ export class ComputerManager implements Computer {
     return Promise.all(computerProviders().map(async (provider) => {
       const resolved = await this.credentials.resolve(provider.id)
       const capabilities = this.active?.id === provider.id ? this.active.computer.runtimeCapabilities ?? provider.capabilities : provider.capabilities
-      return { id: provider.id, label: provider.label, capabilities, fields: provider.fields, configured: provider.fields.length === 0 || resolved.source !== null, credentialSource: resolved.source }
+      return { id: provider.id, label: provider.label, capabilities, fields: provider.fields, configured: provider.fields.length === 0 || resolved.source !== null, credentialSource: resolved.source, managed: this.credentials.isManaged(provider.id) }
     }))
   }
   async setProvider(id: ComputerProviderId): Promise<void> {

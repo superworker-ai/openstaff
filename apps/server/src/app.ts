@@ -68,7 +68,7 @@ export async function createApplication(options: CreateApplicationOptions = {}):
   const secrets = await Secrets.open(config.dataDir)
   const store = options.workspaceStore ?? createWorkspaceStore(config.dataDir)
   const durable = new DurableWorkspace(store, database.db)
-  const computer = new ComputerManager(`${config.dataDir}/workspace`, database.db, secrets, durable, config.plan)
+  const computer = new ComputerManager(`${config.dataDir}/workspace`, database.db, secrets, durable, config.plan, config.managedKeys)
   const hub = new RealtimeHub(database.db, () => computer.desktop(), config.publicAppUrl, config.state)
   computer.setHub(hub)
   try { await computer.initialize() }
@@ -86,7 +86,7 @@ export async function createApplication(options: CreateApplicationOptions = {}):
   const registry = new PluginRegistry(database.db, secrets, config.publicAppUrl)
   await registry.rebuild()
   const installer = new PluginInstaller(database.db, config.dataDir, secrets, registry)
-  const composio = new ComposioService(database.db, admission, keys, config.dataDir, options.composioClient)
+  const composio = new ComposioService(database.db, admission, keys, config.dataDir, options.composioClient, config.composioUserId)
   const automationService = new AutomationService(database.db, admission, options.automationClock, hub)
   const modelResolver = options.modelResolver ?? ((id: string) => resolveModel(id, keys))
   const compactor = new RoomCompactor(database.db, modelResolver, config.contextMessages)

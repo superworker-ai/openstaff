@@ -9,6 +9,7 @@ import type { AppEnv } from './context.js'
 import { ComputerLeaseService } from '../computer/lease.js'
 import type { RealtimeHub } from '../realtime/hub.js'
 import { createId } from '@openstaff/shared'
+import { readConfig } from '../config.js'
 
 let f: Awaited<ReturnType<typeof computerFixture>>, app: Hono<AppEnv>
 let lease: ComputerLeaseService
@@ -34,7 +35,7 @@ beforeEach(async () => {
   await f.db.insert(sessions).values({ id: 'computer-member', userId: memberId, expiresAt: '2099-01-01T00:00:00.000Z' })
   app = new Hono<AppEnv>()
   app.use('/api/*', requireAuth(f.db))
-  app.route('/api/computer', computerRoutes({ computer: f.manager, lease }))
+  app.route('/api/computer', computerRoutes({ computer: f.manager, lease, config: readConfig({ dataDir: f.directory }) }))
 })
 afterEach(async () => { lease.close(); await f.cleanup(); vi.restoreAllMocks(); vi.unstubAllEnvs() })
 
