@@ -4,7 +4,6 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { requireAuth } from '../auth/session.js'
 import type { ComputerManager } from '../computer/manager.js'
 import type { DesktopEndpoints } from '../computer/types.js'
-import { sessions } from '../db/schema.js'
 import { fixture } from '../test/fixture.js'
 import type { AppEnv } from './context.js'
 import { computerDesktopRoutes } from './computer-desktop.js'
@@ -22,7 +21,6 @@ const secret = 'desktop-proxy-secret-canary'
 
 beforeEach(async () => {
   f = await fixture()
-  await f.db.insert(sessions).values({ id: 'desktop-session', userId: f.userId, expiresAt: '2099-01-01T00:00:00.000Z' })
   upstream = createServer((request, response) => {
     lastAuthorization = request.headers.authorization
     if (![desktopAuthorization('viewer'), desktopAuthorization('controller')].includes(request.headers.authorization ?? '')) { response.statusCode = 401; response.end(); return }
@@ -36,7 +34,7 @@ beforeEach(async () => {
   const computer = { desktop: vi.fn(async () => desktop) } as unknown as ComputerManager
   lease = new ComputerLeaseService(f.db, { broadcastAll: vi.fn(), broadcastRoom: vi.fn() } as Pick<RealtimeHub, 'broadcastAll' | 'broadcastRoom'>)
   app = new Hono<AppEnv>()
-  app.use('/api/*', requireAuth(f.db))
+  app.use('/api/*', requireAuth(f.auth))
   app.route('/api/computer/desktop', computerDesktopRoutes({ computer, lease, config: readConfig({ dataDir: f.directory, port: 0, maxConcurrentTurns: 1, contextMessages: 10, defaultModel: 'test', publicAppUrl: 'http://app.example.test' }) }))
 })
 
@@ -51,7 +49,7 @@ function desktopAuthorization(user: 'viewer' | 'controller') {
 }
 
 function request(path = '/', options: RequestInit = {}) {
-  return app.request(`http://app.example.test/api/computer/desktop${path}`, { ...options, headers: { cookie: 'sw_session=desktop-session; upstream-cookie=must-not-pass', ...options.headers } })
+  return app.request(`http://app.example.test/api/computer/desktop${path}`, { ...options, headers: { cookie: `${f.cookie}; upstream-cookie=must-not-pass`, ...options.headers } })
 }
 
 it('streams HTML with injected viewer auth, no client cookie, and no cache', async () => {

@@ -2,11 +2,12 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { Hono } from 'hono'
 import { createId } from '@openstaff/shared'
 import { requireAuth } from '../auth/session.js'
-import { computerSessions, messages, sessions, turns, users } from '../db/schema.js'
+import { computerSessions, messages, turns } from '../db/schema.js'
 import { fixture } from '../test/fixture.js'
 import { readConfig } from '../config.js'
 import type { AppEnv } from './context.js'
 import { usageExportRoutes, usageRoutes } from './usage.js'
+import { signedIn } from '../test/auth.js'
 
 let f: Awaited<ReturnType<typeof fixture>>, app: Hono<AppEnv>
 
@@ -17,9 +18,8 @@ beforeEach(async () => {
   const dependencies = { db: f.db, config } as any
   app = new Hono<AppEnv>()
   app.route('/api/usage/export', usageExportRoutes(dependencies))
-  app.use('/api/*', requireAuth(f.db))
+  app.use('/api/*', requireAuth(f.auth))
   app.route('/api/usage', usageRoutes(dependencies))
-  await f.db.insert(sessions).values({ id: 'usage-owner', userId: f.userId, expiresAt: '2099-01-01T00:00:00.000Z' })
 })
 
 afterEach(async () => { vi.useRealTimers(); await f.close(); vi.restoreAllMocks(); vi.unstubAllEnvs() })
@@ -67,11 +67,9 @@ it('aggregates the UTC month for owners and rejects members', async () => {
     { id: 'cps_month', provider: 'e2b', externalId: 'one', startedAt: '2026-09-01T00:00:00.000Z', endedAt: '2026-09-01T01:30:00.000Z', endReason: 'stopped' },
     { id: 'cps_open_month', provider: 'e2b', externalId: 'two', startedAt: '2026-09-14T11:30:00.000Z', endedAt: null, endReason: null },
   ])
-  const response = await app.request('/api/usage/summary', { headers: { cookie: 'sw_session=usage-owner' } })
+  const response = await app.request('/api/usage/summary', { headers: { cookie: f.cookie } })
   expect(response.status).toBe(200)
   expect(await response.json()).toMatchObject({ month: '2026-09', plan: 'team', includedCreditsUsd: 20, tokens: { byModel: { 'xai/test': { inputTokens: 15, outputTokens: 5, totalTokens: 22, turns: 2 } } }, computer: { byProvider: { e2b: { minutes: 120, sessions: 2 } } } })
-  const memberId = createId('user')
-  await f.db.insert(users).values({ id: memberId, email: 'member-usage@example.test', name: 'Member', passwordHash: 'x', role: 'member', createdAt: new Date().toISOString() })
-  await f.db.insert(sessions).values({ id: 'usage-member', userId: memberId, expiresAt: '2099-01-01T00:00:00.000Z' })
-  expect((await app.request('/api/usage/summary', { headers: { cookie: 'sw_session=usage-member' } })).status).toBe(403)
+  const member = await signedIn(f, { email: 'member-usage@example.test', name: 'Member', role: 'member' })
+  expect((await app.request('/api/usage/summary', { headers: { cookie: member.cookie } })).status).toBe(403)
 })

@@ -28,11 +28,11 @@ describe.skipIf(process.env.SKIP_BROWSER_TESTS === '1')('connection flows in the
     h.page.on('pageerror', (error) => errors.push(error.message))
     await h.page.goto(`${h.url}/login`, { waitUntil: 'domcontentloaded' })
     await h.page.locator('body[data-hydrated="true"]').waitFor()
-    await h.page.getByRole('button', { name: 'Sign up', exact: true }).click()
+    await h.page.getByRole('link', { name: 'Create account', exact: true }).click()
     await h.page.getByPlaceholder('Your name').fill('Connections Owner')
     await h.page.getByPlaceholder('Email', { exact: true }).fill('connections@example.com')
     await h.page.getByPlaceholder('Password', { exact: true }).fill('password123')
-    await h.page.getByRole('button', { name: 'Create workspace account' }).click()
+    await h.page.getByRole('button', { name: 'Create account', exact: true }).click()
     await h.page.waitForURL('**/bots/new', { waitUntil: 'domcontentloaded' })
     const root = await writeOAuthPlugin(h.api.config.dataDir, fake.url)
     const entries = [{ name: 'gmail', source: './gmail', hasMcp: true, manifest: { name: 'gmail', displayName: 'Gmail', description: 'Read, organize, and reply to email.' } }, { name: 'google-drive', source: './drive', hasMcp: true, manifest: { name: 'google-drive', displayName: 'Google Drive', description: 'Find and work with your documents.' } }, { name: 'github', source: './github', hasMcp: true, manifest: { name: 'github', displayName: 'GitHub', description: 'Work with repositories and issues.' } }]

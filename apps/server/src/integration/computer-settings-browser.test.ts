@@ -15,11 +15,11 @@ describe.skipIf(process.env.SKIP_BROWSER_TESTS === '1')('Computer Settings brows
     try {
       await h.page.goto(`${h.url}/login`, { waitUntil: 'domcontentloaded' })
       await h.page.locator('body[data-hydrated="true"]').waitFor()
-      await h.page.getByRole('button', { name: 'Sign up', exact: true }).click()
+      await h.page.getByRole('link', { name: 'Create account', exact: true }).click()
       await h.page.getByPlaceholder('Your name').fill('Computer Owner')
       await h.page.getByPlaceholder('Email', { exact: true }).fill('computer-settings@example.test')
       await h.page.getByPlaceholder('Password', { exact: true }).fill('browser-password123')
-      await h.page.getByRole('button', { name: 'Create workspace account' }).click()
+      await h.page.getByRole('button', { name: 'Create account', exact: true }).click()
       await h.page.getByRole('button', { name: /Engineer/ }).click()
       await h.page.getByPlaceholder('e.g. Drake').fill('Computer Bot')
       await h.page.getByRole('button', { name: 'Create teammate' }).click()

@@ -26,7 +26,7 @@ describe('approval pause and resume', () => {
     computer = new LocalComputer(path.join(directory, 'workspace'))
     await computer.initialize()
     const now = new Date().toISOString()
-    await handle.db.insert(users).values({ id: userId, email: 'approval@example.com', name: 'Owner', passwordHash: 'x', avatar: null, role: 'owner', createdAt: now })
+    await handle.db.insert(users).values({ id: userId, email: 'approval@example.com', name: 'Owner', avatar: null, role: 'owner', createdAt: new Date(now), updatedAt: new Date(now) })
     await handle.db.insert(bots).values({ id: botId, slug: 'writer', name: 'Writer', avatar: { shape: 'circle', color: '#2E90FA' }, job: 'Writer', instructions: '', model: 'xai/mock', reasoningEffort: null, approvalPolicy: 'writes', status: 'working', createdBy: userId, createdAt: now })
     await handle.db.insert(rooms).values({ id: roomId, kind: 'dm', name: null, section: null, createdBy: userId, lastMessageAt: now, lastMessagePreview: 'write' })
     await handle.db.insert(roomMembers).values([{ roomId, memberKind: 'user', memberId: userId, joinedAt: now }, { roomId, memberKind: 'bot', memberId: botId, joinedAt: now }])

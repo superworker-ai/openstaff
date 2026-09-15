@@ -30,7 +30,7 @@ async function application(config: Partial<Config> = {}) {
 }
 
 async function signup(app: Application, email = 'owner@example.test') {
-  const response = await app.app.request('/api/auth/signup', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Owner', email, password: 'password123' }) })
+  const response = await app.app.request('/api/auth/sign-up/email', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Owner', email, password: 'password123' }) })
   return { response, cookie: response.headers.get('set-cookie')?.split(';')[0] ?? '' }
 }
 
@@ -46,8 +46,8 @@ it('returns starter plan-limit responses at all four write paths', async () => {
   const now = new Date().toISOString()
   const owner = (await running.database.db.select({ id: users.id }).from(users).where(eq(users.email, 'owner@example.test')).limit(1))[0]!
   await running.database.db.insert(users).values([
-    { id: createId('user'), email: 'two@example.test', name: 'Two', passwordHash: 'x', role: 'member', createdAt: now },
-    { id: createId('user'), email: 'three@example.test', name: 'Three', passwordHash: 'x', role: 'member', createdAt: now },
+    { id: createId('user'), email: 'two@example.test', name: 'Two', role: 'member', createdAt: new Date(now), updatedAt: new Date(now) },
+    { id: createId('user'), email: 'three@example.test', name: 'Three', role: 'member', createdAt: new Date(now), updatedAt: new Date(now) },
   ])
   const botIds = [createId('bot'), createId('bot'), createId('bot')]
   await running.database.db.insert(bots).values(botIds.map((id, index) => ({ id, slug: `bot-${index}`, name: `Bot ${index}`, job: 'Test', instructions: '', avatar: { shape: 'circle' as const, color: '#2E90FA' }, approvalPolicy: 'writes' as const, status: 'idle' as const, createdBy: owner.id, createdAt: now })))
@@ -74,8 +74,8 @@ it('keeps all four write paths unrestricted on the default self-hosted plan', as
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   const running = await application()
   const { response: ownerResponse, cookie } = await signup(running)
-  expect(ownerResponse.status).toBe(201)
-  expect((await signup(running, 'member@example.test')).response.status).toBe(201)
+  expect(ownerResponse.status).toBe(200)
+  expect((await signup(running, 'member@example.test')).response.status).toBe(200)
   const botResponse = await running.app.request('/api/bots', { method: 'POST', headers: { cookie, 'content-type': 'application/json' }, body: JSON.stringify(botInput) })
   expect(botResponse.status).toBe(201)
   const { bot, room } = await botResponse.json() as any
@@ -89,7 +89,7 @@ it('allows only the suspended-state allowlist and rejects WebSocket upgrades', a
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   const running = await application({ state: 'suspended' })
   for (const url of ['/api/health', '/api/ready', '/api/plan']) expect((await running.app.request(url)).status).not.toBe(402)
-  expect((await running.app.request('/api/auth/me')).status).toBe(401)
+  expect((await running.app.request('/api/auth/get-session')).status).toBe(200)
   expect((await running.app.request('/api/usage/export')).status).toBe(404)
   for (const url of ['/api/bots', '/api/hooks/automations/missing', '/api/workspace']) {
     const response = await running.app.request(url)
