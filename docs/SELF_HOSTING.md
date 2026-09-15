@@ -8,7 +8,8 @@ New installations store SQLite data in `DATA_DIR/openstaff.db`. If an older inst
 has only `DATA_DIR/superworkers.db`, the server renames it to `openstaff.db` on first start.
 
 Self-hosters can ignore the hosted-mode variables. Their defaults select the unrestricted
-`self-hosted` plan with an active workspace, editable provider keys, and no usage export.
+`self-hosted` plan with an active workspace, editable provider keys and Computer credentials,
+and no usage export.
 
 1. Install Docker Engine with Compose v2 and point a DNS name at the VM.
 2. Copy `.env.example` to `.env`. Set `PUBLIC_HOST`, an HTTPS `PUBLIC_APP_URL`, a

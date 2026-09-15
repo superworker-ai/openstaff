@@ -74,10 +74,13 @@ inert for self-hosters.
 
 ### 1.2 Managed keys
 
-- When `MANAGED_KEYS=1`, the provider key settings are hidden in Settings and the server
-  ignores database keys for `xai`, `anthropic`, `openai`, and `aiGateway`; only the env values
-  are used. `composio` and Computer provider credentials stay customer-editable.
-- Existing `KeyStore.get` gains one branch; no schema change.
+- When `MANAGED_KEYS=1`, Settings hides all model-provider and Composio key fields plus
+  Computer credential forms. The server ignores their saved database values and accepts
+  model-provider, Composio, and Computer credentials only from the environment.
+- `COMPOSIO_USER_ID` identifies the tenant inside the host's Composio account so connected
+  accounts and tool execution stay isolated per workspace. It defaults to `workspace` for
+  compatibility with existing connections.
+- Existing key and credential resolution gains managed branches; no schema change.
 
 ### 1.3 Usage export
 
