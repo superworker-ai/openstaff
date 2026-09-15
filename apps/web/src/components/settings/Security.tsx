@@ -15,7 +15,7 @@ export function Security({ user }: { user: User }) {
   const owner = user.role === 'owner', action = useAction()
   const origin = typeof window === 'undefined' ? '' : window.location.origin
   const security = useQuery({ queryKey: ['workspace-security'], queryFn: () => api<{ security: SecuritySettings; sso: { enabled: boolean; domainVerification: boolean } }>('/api/security') })
-  const providers = useQuery({ queryKey: ['sso-providers'], queryFn: () => api<{ providers: SSOProvider[] }>('/api/auth/sso/providers'), enabled: security.data?.sso.enabled === true })
+  const providers = useQuery({ queryKey: ['sso-providers'], queryFn: () => api<{ providers: SSOProvider[] }>('/api/security'), enabled: security.data?.sso.enabled === true })
   const [form, setForm] = useState(initialForm), [editing, setEditing] = useState(false), [dns, setDns] = useState<{ domain: string; token: string }>(), [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]), [auditCursor, setAuditCursor] = useState<string | null | undefined>(undefined), [auditLoading, setAuditLoading] = useState(false)
   const refresh = async () => { await Promise.all([providers.refetch(), security.refetch()]) }
   const field = (key: keyof typeof form, value: string) => setForm((current) => ({ ...current, [key]: value }))

@@ -73,13 +73,14 @@ export function createAuth(config: Config, db: Database, dependencies: { sendEma
   const configuredSocialProviders = Object.keys(config.social) as Array<keyof Config['social']>
 
   const hasSsoDomain = async (email: string) => (await db.select({ domain: ssoProvider.domain }).from(ssoProvider)).some((row) => domainMatches(email, row.domain))
-  const enforceSignup = async (value: unknown, headers: Headers | undefined, options: { afterCreate?: boolean; skipCode?: boolean } = {}) => {
+  // viaSso: only identity-provider provisioning may rely on a registered SSO domain (D5); password and magic-link sign-ups never do.
+  const enforceSignup = async (value: unknown, headers: Headers | undefined, options: { afterCreate?: boolean; skipCode?: boolean; viaSso?: boolean } = {}) => {
     const email = textField(value, 'email')?.trim().toLowerCase()
     if (!email) return
     const rawTotal = (await db.select({ value: count() }).from(users))[0]?.value ?? 0
     const total = Math.max(0, rawTotal - (options.afterCreate ? 1 : 0))
     const suppliedCode = headers?.get('x-signup-code') ?? textField(value, 'signupCode')
-    const admittedBySsoDomain = total > 0 && await hasSsoDomain(email)
+    const admittedBySsoDomain = Boolean(options.viaSso) && total > 0 && await hasSsoDomain(email)
     if (!admittedBySsoDomain && !options.skipCode && config.signupCode && (total === 0 || config.authSignup === 'code') && suppliedCode !== config.signupCode) {
       throw new APIError('FORBIDDEN', { code: 'invalid_signup_code', message: 'Invalid signup code' })
     }
@@ -105,7 +106,7 @@ export function createAuth(config: Config, db: Database, dependencies: { sendEma
     sso({
       provisionUser: async ({ user, provider }) => {
         if (!domainMatches(user.email, provider.domain)) throw new APIError('FORBIDDEN', { code: 'sso_domain_mismatch', message: 'The identity email does not match the SSO provider domain' })
-        await enforceSignup(user, undefined, { afterCreate: true })
+        await enforceSignup(user, undefined, { afterCreate: true, viaSso: true })
       },
       domainVerification: { enabled: config.plan !== 'self-hosted' },
       saml: { enableInResponseToValidation: true, allowIdpInitiated: false },
@@ -167,25 +168,26 @@ export function createAuth(config: Config, db: Database, dependencies: { sendEma
     account: { accountLinking: { enabled: true, trustedProviders: configuredSocialProviders } },
     databaseHooks: {
       user: { create: { before: async (user, context) => {
-        await enforceSignup(user, context?.headers, { skipCode: context?.path === '/sign-up/email' })
+        await enforceSignup(user, context?.headers, { skipCode: context?.path === '/sign-up/email', viaSso: Boolean(context?.path?.startsWith('/sso/')) })
         const total = (await db.select({ value: count() }).from(users))[0]?.value ?? 0
         return { data: { ...user, role: total === 0 ? 'owner' : 'member' } }
       } } },
     },
     hooks: {
       before: createAuthMiddleware(async (context) => {
+        // SSO-only wins over the sign-up policy so the user gets the actionable message.
+        if (['/sign-up/email', '/sign-in/email', '/sign-in/magic-link', '/request-password-reset'].includes(context.path)) {
+          const email = textField(context.body, 'email')?.trim().toLowerCase()
+          const providers = email ? await db.select({ domain: ssoProvider.domain }).from(ssoProvider) : []
+          if (email && providers.some((row) => domainMatches(email, row.domain)) && (await readWorkspaceAuthSettings(db)).ssoOnly) {
+            const target = (await db.select({ role: users.role }).from(users).where(eq(users.email, email)).limit(1))[0]
+            if (target?.role !== 'owner') throw new APIError('FORBIDDEN', { code: 'sso_required', message: 'Your organisation requires single sign-on' })
+          }
+        }
         if (context.path === '/sign-up/email') await enforceSignup(context.body, context.headers)
         if (context.path === '/sign-in/magic-link') {
           const email = textField(context.body, 'email')?.trim().toLowerCase()
           if (email && !(await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1))[0]) await enforceSignup(context.body, context.headers)
-        }
-        if (['/sign-in/email', '/sign-in/magic-link', '/request-password-reset'].includes(context.path)) {
-          const email = textField(context.body, 'email')?.trim().toLowerCase()
-          if (!email) return
-          const providers = await db.select({ domain: ssoProvider.domain }).from(ssoProvider)
-          if (!providers.some((row) => domainMatches(email, row.domain)) || !(await readWorkspaceAuthSettings(db)).ssoOnly) return
-          const target = (await db.select({ role: users.role }).from(users).where(eq(users.email, email)).limit(1))[0]
-          if (target?.role !== 'owner') throw new APIError('FORBIDDEN', { code: 'sso_required', message: 'Your organisation requires single sign-on' })
         }
       }),
       after: createAuthMiddleware(async (context) => {

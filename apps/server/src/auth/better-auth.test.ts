@@ -291,6 +291,21 @@ describe('single sign-on controls', () => {
     } finally { h.close() }
   })
 
+  it('never lets a registered SSO domain waive the policy for password sign-up, and SSO-only refuses it outright', async () => {
+    const h = await harness({ authSignup: 'invite', publicAppUrl: 'http://app.example.test', trustedOrigins: ['http://app.example.test'] })
+    try {
+      const owner = await signedIn(h, { email: 'owner@example.test', role: 'owner' })
+      await h.database.db.insert(ssoProvider).values({ id: createId('ssoProvider'), providerId: 'company-sso', issuer: 'https://idp.example.test', domain: 'example.test', userId: owner.user.id })
+      const rejected = await signup(h.app, 'newbie@example.test')
+      expect(rejected.status).toBe(403); expect(await rejected.json()).toMatchObject({ code: 'invitation_required' })
+      const row = (await h.database.db.select({ settings: workspace.settings }).from(workspace).limit(1))[0]!
+      await h.database.db.update(workspace).set({ settings: { ...row.settings, auth: { ssoOnly: true, requireTwoFactor: false } } })
+      const ssoOnly = await signup(h.app, 'another@example.test')
+      expect(ssoOnly.status).toBe(403); expect(await ssoOnly.json()).toMatchObject({ code: 'sso_required' })
+      expect(await h.database.db.select().from(users).where(eq(users.email, 'newbie@example.test'))).toHaveLength(0)
+    } finally { h.close() }
+  })
+
   it('completes OIDC sign-in and applies invite policy to provisioned users', async () => {
     const issuer = 'https://oidc.example.test', clientId = 'openstaff-test-client', keyId = 'test-key'
     const { publicKey, privateKey } = await generateKeyPair('RS256')
@@ -397,7 +412,12 @@ describe('workspace security and two-factor', () => {
     try {
       const owner = await signedIn(h, { email: 'owner@example.test', role: 'owner' })
       const adminUser = await signedIn(h, { email: 'admin@example.test', role: 'admin' })
-      expect((await h.app.request('/api/security', { headers: { cookie: adminUser.cookie } })).status).toBe(200)
+      await h.database.db.insert(ssoProvider).values({ id: createId('ssoProvider'), providerId: 'owner-made', issuer: 'https://idp.example.test', domain: 'example.test', userId: owner.user.id, oidcConfig: JSON.stringify({ clientId: 'client-1234', clientSecret: 'top-secret-value', discoveryEndpoint: 'https://idp.example.test/.well-known/openid-configuration' }) })
+      const listed = await h.app.request('/api/security', { headers: { cookie: adminUser.cookie } })
+      expect(listed.status).toBe(200)
+      const listedText = await listed.clone().text()
+      expect(await listed.json()).toMatchObject({ providers: [{ providerId: 'owner-made', type: 'oidc', oidcConfig: { clientIdLastFour: '1234' } }] })
+      expect(listedText).not.toContain('top-secret-value')
       expect((await h.app.request('/api/security', { ...jsonPost({ ssoOnly: true }, adminUser.cookie), method: 'PATCH' })).status).toBe(403)
       const changed = await h.app.request('/api/security', { ...jsonPost({ ssoOnly: true, requireTwoFactor: true }, owner.cookie), method: 'PATCH' })
       expect(changed.status).toBe(200); expect(await changed.json()).toMatchObject({ security: { ssoOnly: true, requireTwoFactor: true } })
