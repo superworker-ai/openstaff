@@ -6,6 +6,8 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Added
 
+- Environment-driven workspace plans and states, managed model keys, write-path entitlements,
+  Computer session metering, control-plane usage export, and an owner Usage settings page.
 - Freestyle VM and Vercel Sandbox Computer providers with persistent lifecycle, snapshots,
   scrubbed execution, jailed file APIs, credential validation, and gated contract coverage.
 - Expressive bot characters, persona creation and editing, idle personality actions, and a
