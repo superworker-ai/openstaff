@@ -5,9 +5,10 @@ import type { Avatar, Bot } from '@openstaff/shared'
 import { AvatarBuilder } from '../components/AvatarBuilder'
 import { api } from '../lib/api'
 import { loadBot, type RoomData, type RoomView } from '../lib/loaders'
+import { authRedirect } from '../lib/server-api'
 
 export const Route = createFileRoute('/bots/$botId')({
-  loader: async ({ params }) => { try { return await loadBot({ data: { botId: params.botId } }) } catch { throw redirect({ to: '/login' }) } },
+  loader: async ({ params }) => { try { return await loadBot({ data: { botId: params.botId } }) } catch (reason) { throw redirect({ to: authRedirect(reason) }) } },
   component: EditBotPage,
 })
 

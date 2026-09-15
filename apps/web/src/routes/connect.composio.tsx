@@ -3,10 +3,11 @@ import { appName } from '@openstaff/shared'
 import { loadMe } from '../lib/loaders'
 import { useConnectedApps } from '../hooks/useConnectedApps'
 import { ComposioConnect } from '../components/ComposioConnect'
+import { authRedirect } from '../lib/server-api'
 
 export const Route = createFileRoute('/connect/composio')({
   validateSearch: (search: Record<string, unknown>) => ({ toolkit: typeof search.toolkit === 'string' ? search.toolkit : 'gmail', approval: typeof search.approval === 'string' ? search.approval : undefined }),
-  loader: async () => { try { return await loadMe() } catch { throw redirect({ to: '/login' }) } },
+  loader: async () => { try { return await loadMe() } catch (reason) { throw redirect({ to: authRedirect(reason) }) } },
   component: ConnectComposioPage,
 })
 function ConnectComposioPage() {

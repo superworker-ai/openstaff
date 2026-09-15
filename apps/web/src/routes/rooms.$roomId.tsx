@@ -10,13 +10,14 @@ import { Thread } from '../components/Thread'
 import { useRoomSocket } from '../hooks/useRoomSocket'
 import { api } from '../lib/api'
 import { loadMe, loadRoomData, type RoomData, type RoomView } from '../lib/loaders'
+import { authRedirect } from '../lib/server-api'
 
 export const Route = createFileRoute('/rooms/$roomId')({
   loader: async ({ params }) => {
     try {
       const [data, me] = await Promise.all([loadRoomData({ data: { roomId: params.roomId } }), loadMe()])
       return { data, user: me.user }
-    } catch { throw redirect({ to: '/login' }) }
+    } catch (reason) { throw redirect({ to: authRedirect(reason) }) }
   },
   component: RoomPage,
 })

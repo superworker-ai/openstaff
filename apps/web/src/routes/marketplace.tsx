@@ -9,8 +9,9 @@ import { MarketplaceGrid } from '../components/marketplace/Grid'
 import { AppCard, SkillCard } from '../components/marketplace/Cards'
 import { useDebouncedSearch, useMarketplace, useMarketplaceUpdates } from '../hooks/useMarketplace'
 import { useConnectionUpdates } from '../hooks/useConnectedApps'
+import { authRedirect } from '../lib/server-api'
 
-export const Route = createFileRoute('/marketplace')({ loader: async () => { try { return await loadMe() } catch { throw redirect({ to: '/login' }) } }, component: MarketplacePage })
+export const Route = createFileRoute('/marketplace')({ loader: async () => { try { return await loadMe() } catch (reason) { throw redirect({ to: authRedirect(reason) }) } }, component: MarketplacePage })
 
 function MarketplacePage() {
   useConnectionUpdates()
