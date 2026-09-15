@@ -10,7 +10,7 @@ import { Thread } from '../components/Thread'
 import { useRoomSocket } from '../hooks/useRoomSocket'
 import { api } from '../lib/api'
 import { loadMe, loadRoomData, type RoomData, type RoomView } from '../lib/loaders'
-import { authRedirect } from '../lib/server-api'
+import { authRedirect } from '../lib/api-error'
 
 export const Route = createFileRoute('/rooms/$roomId')({
   loader: async ({ params }) => {

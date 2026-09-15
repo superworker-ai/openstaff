@@ -1,6 +1,6 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
 import { loadRooms, type RoomView } from '../lib/loaders'
-import { authRedirect } from '../lib/server-api'
+import { authRedirect } from '../lib/api-error'
 
 export const Route = createFileRoute('/')({
   loader: async () => {

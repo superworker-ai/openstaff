@@ -1,12 +1,7 @@
 import { getRequestHeader } from '@tanstack/react-start/server'
+import { ApiError } from './api-error'
 
-export class ApiError extends Error {
-  constructor(readonly status: number, message: string, readonly code?: string) {
-    super(message)
-  }
-}
-
-export const authRedirect = (reason: unknown): '/login' | '/two-factor/setup' => reason instanceof ApiError && reason.code === 'two_factor_required' ? '/two-factor/setup' : '/login'
+export { ApiError, authRedirect } from './api-error'
 
 export async function serverApi<T>(path: string): Promise<T> {
   const cookie = getRequestHeader('cookie')

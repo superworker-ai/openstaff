@@ -3,7 +3,7 @@ import { appName } from '@openstaff/shared'
 import { loadMe } from '../lib/loaders'
 import { useConnectedApps } from '../hooks/useConnectedApps'
 import { ComposioConnect } from '../components/ComposioConnect'
-import { authRedirect } from '../lib/server-api'
+import { authRedirect } from '../lib/api-error'
 
 export const Route = createFileRoute('/connect/composio')({
   validateSearch: (search: Record<string, unknown>) => ({ toolkit: typeof search.toolkit === 'string' ? search.toolkit : 'gmail', approval: typeof search.approval === 'string' ? search.approval : undefined }),

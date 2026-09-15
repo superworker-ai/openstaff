@@ -7,7 +7,7 @@ import { FirstRunChecklist } from '../components/FirstRunChecklist'
 import { ApiError, api } from '../lib/api'
 import { loadBotTemplates, loadMe } from '../lib/loaders'
 import { usePlan } from '../hooks/usePlan'
-import { authRedirect } from '../lib/server-api'
+import { authRedirect } from '../lib/api-error'
 
 export const Route = createFileRoute('/bots/new')({
   loader: async () => { try { const [me, templates] = await Promise.all([loadMe(), loadBotTemplates()]); return { ...me, ...templates } } catch (reason) { throw redirect({ to: authRedirect(reason) }) } },
