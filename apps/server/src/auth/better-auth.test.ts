@@ -418,6 +418,7 @@ describe('workspace security and two-factor', () => {
       const setupCookie = responseCookies(enabled, user.cookie)
       const verified = await h.app.request('http://app.example.test/api/auth/two-factor/verify-totp', jsonPost({ code, trustDevice: true }, setupCookie))
       expect(verified.status, await verified.clone().text()).toBe(200)
+      expect(await h.database.db.select().from(auditLog).where(eq(auditLog.event, 'auth.two_factor_enabled'))).toHaveLength(1)
       const verificationCookie = responseCookies(verified, user.cookie)
       const signedOut = await h.app.request('http://app.example.test/api/auth/sign-out', jsonPost({}, verificationCookie))
       expect(signedOut.status).toBe(200)
@@ -430,6 +431,7 @@ describe('workspace security and two-factor', () => {
       const activeCookie = responseCookies(backup)
       expect(activeCookie).toBeTruthy()
       expect((await h.app.request('http://app.example.test/api/auth/two-factor/disable', jsonPost({ password: TEST_PASSWORD }, activeCookie))).status).toBe(200)
+      expect(await h.database.db.select().from(auditLog).where(eq(auditLog.event, 'auth.two_factor_disabled'))).toHaveLength(1)
     } finally { h.close() }
   })
 
