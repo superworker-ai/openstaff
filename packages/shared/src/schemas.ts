@@ -25,6 +25,9 @@ export const userSchema = z.object({
   role: z.enum(['owner', 'admin', 'member']),
   emailVerified: z.boolean(),
   twoFactorEnabled: z.boolean(),
+  banned: z.boolean().optional(),
+  banReason: z.string().nullable().optional(),
+  banExpires: isoDateSchema.nullable().optional(),
   createdAt: isoDateSchema,
 })
 

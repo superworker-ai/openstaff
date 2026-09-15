@@ -5,7 +5,7 @@ import WebSocket, { WebSocketServer } from 'ws'
 import { clientWireMessageSchema, type ComputerLease, type ServerWireMessage, type User, type WorkspaceState } from '@openstaff/shared'
 import type { Database } from '../db/index.js'
 import { roomMembers } from '../db/schema.js'
-import { publicUser } from '../auth/session.js'
+import { needsTwoFactorEnrollment, publicUser } from '../auth/session.js'
 import type { OpenStaffAuth } from '../auth/better-auth.js'
 import { DESKTOP_PREFIX, desktopAuthorization, desktopStreamReady, desktopTarget, type DesktopMode } from '../api/computer-desktop.js'
 import { originAllowed } from '../api/origin.js'
@@ -49,14 +49,15 @@ export class RealtimeHub {
         return
       }
       if (url.pathname !== '/ws') return
-      const user = await this.authenticate(request)
-      if (!user) {
+      const authenticated = await this.authenticate(request)
+      if (!authenticated) {
         socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
         socket.destroy()
         return
       }
+      if (authenticated === 'two_factor_required') return this.rejectUpgrade(socket, 403, 'Two-factor authentication enrolment is required', 'two_factor_required')
       this.socketServer.handleUpgrade(request, socket, head, (webSocket) => {
-        this.connected(webSocket, request, user)
+        this.connected(webSocket, request, authenticated)
       })
     })
   }
@@ -80,8 +81,10 @@ export class RealtimeHub {
   }
 
   private async upgradeDesktop(request: IncomingMessage, socket: import('node:stream').Duplex, head: Buffer): Promise<void> {
-    const user = await this.authenticate(request)
-    if (!user) return this.rejectUpgrade(socket, 401, 'Authentication required')
+    const authenticated = await this.authenticate(request)
+    if (!authenticated) return this.rejectUpgrade(socket, 401, 'Authentication required')
+    if (authenticated === 'two_factor_required') return this.rejectUpgrade(socket, 403, 'Two-factor authentication enrolment is required', 'two_factor_required')
+    const user = authenticated
     const expectedOrigin = this.expectedOrigin(request) ?? 'http://localhost'
     if (!originAllowed(request.headers.origin, { publicAppUrl: this.publicAppUrl, headers: request.headers, requestUrl: new URL(request.url ?? '/', expectedOrigin).toString(), encrypted: Boolean((request.socket as { encrypted?: boolean }).encrypted) })) return this.rejectUpgrade(socket, 403, 'Origin not allowed')
     if (!this.desktop || this.desktopStreams.size + this.pendingDesktopStreams >= 4) return this.rejectUpgrade(socket, 429, 'Desktop stream limit reached')
@@ -140,14 +143,16 @@ export class RealtimeHub {
     finally { this.pendingDesktopStreams -= 1 }
   }
 
-  private async authenticate(request: IncomingMessage): Promise<User | null> {
+  private async authenticate(request: IncomingMessage): Promise<User | 'two_factor_required' | null> {
     const headers = new Headers()
     for (const [name, value] of Object.entries(request.headers)) {
       if (Array.isArray(value)) for (const item of value) headers.append(name, item)
       else if (value !== undefined) headers.set(name, value)
     }
     const session = await this.auth.api.getSession({ headers })
-    return session ? publicUser(session.user) : null
+    if (!session) return null
+    const user = publicUser(session.user)
+    return await needsTwoFactorEnrollment(this.db, user) ? 'two_factor_required' : user
   }
 
   private connected(socket: WebSocket, _request: IncomingMessage, user: User): void {

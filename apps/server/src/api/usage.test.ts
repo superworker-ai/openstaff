@@ -18,7 +18,7 @@ beforeEach(async () => {
   const dependencies = { db: f.db, config } as any
   app = new Hono<AppEnv>()
   app.route('/api/usage/export', usageExportRoutes(dependencies))
-  app.use('/api/*', requireAuth(f.auth))
+  app.use('/api/*', requireAuth(f.auth, f.db))
   app.route('/api/usage', usageRoutes(dependencies))
 })
 

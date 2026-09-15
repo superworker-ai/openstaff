@@ -34,7 +34,7 @@ beforeEach(async () => {
   const computer = { desktop: vi.fn(async () => desktop) } as unknown as ComputerManager
   lease = new ComputerLeaseService(f.db, { broadcastAll: vi.fn(), broadcastRoom: vi.fn() } as Pick<RealtimeHub, 'broadcastAll' | 'broadcastRoom'>)
   app = new Hono<AppEnv>()
-  app.use('/api/*', requireAuth(f.auth))
+  app.use('/api/*', requireAuth(f.auth, f.db))
   app.route('/api/computer/desktop', computerDesktopRoutes({ computer, lease, config: readConfig({ dataDir: f.directory, port: 0, maxConcurrentTurns: 1, contextMessages: 10, defaultModel: 'test', publicAppUrl: 'http://app.example.test' }) }))
 })
 

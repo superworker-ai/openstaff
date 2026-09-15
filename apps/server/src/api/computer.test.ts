@@ -33,7 +33,7 @@ beforeEach(async () => {
   const member = await signedIn(f, { role: 'member', name: 'Member' })
   memberId = member.user.id; memberCookie = member.cookie
   app = new Hono<AppEnv>()
-  app.use('/api/*', requireAuth(f.auth))
+  app.use('/api/*', requireAuth(f.auth, f.db))
   app.route('/api/computer', computerRoutes({ computer: f.manager, lease }))
 })
 afterEach(async () => { lease.close(); await f.cleanup(); vi.restoreAllMocks(); vi.unstubAllEnvs() })

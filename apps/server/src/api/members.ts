@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { createId } from '@openstaff/shared'
 import { requestIp } from '../audit.js'
 import { publicUser, type AppVariables } from '../auth/session.js'
-import { automations, bots, computerCredentials, invitations, roomMembers, rooms, tasks, users, workspace } from '../db/schema.js'
+import { automations, bots, computerCredentials, invitations, roomMembers, rooms, sessions, tasks, users, workspace } from '../db/schema.js'
 import { invitationTemplate } from '../email/templates.js'
 import { checkMemberPlan } from '../plan.js'
 import type { ApiDependencies } from './context.js'
@@ -13,6 +13,7 @@ import { isResponse, parseBody } from './helpers.js'
 
 const invitationInput = z.object({ email: z.email().transform((value) => value.trim().toLowerCase()), role: z.enum(['admin', 'member']).default('member') })
 const roleInput = z.object({ role: z.enum(['admin', 'member']) })
+const banInput = z.object({ reason: z.string().trim().min(1).max(500).optional(), expiresAt: z.iso.datetime().nullable().optional(), expiresIn: z.number().int().positive().max(31_536_000).optional() }).strict().refine((value) => value.expiresAt === undefined || value.expiresIn === undefined, 'Use either expiresAt or expiresIn')
 const invitationLifetime = 7 * 24 * 60 * 60 * 1000
 const tokenHash = (token: string) => createHash('sha256').update(token).digest('hex')
 const canManage = (role: 'owner' | 'admin' | 'member') => role === 'owner' || role === 'admin'
@@ -44,6 +45,49 @@ export function memberRoutes({ db, audit }: Pick<ApiDependencies, 'db' | 'audit'
     await audit({ actorUserId: context.get('user').id, actorIp: requestIp(context.req.raw.headers), event: 'member.role_changed', targetType: 'user', targetId: target.id, metadata: { from: target.role, to: input.role } })
     const updated = (await db.select().from(users).where(eq(users.id, target.id)).limit(1))[0]!
     return context.json({ member: publicUser(updated) })
+  })
+  app.post('/:id/ban', async (context) => {
+    const input = await parseBody(context, banInput)
+    if (isResponse(input)) return input
+    const target = (await db.select().from(users).where(eq(users.id, context.req.param('id'))).limit(1))[0]
+    if (!target) return context.json({ error: 'Member not found' }, 404)
+    if (target.role === 'owner') return context.json({ error: 'The workspace owner cannot be banned' }, 409)
+    const banExpires = input.expiresAt ? new Date(input.expiresAt) : input.expiresIn ? new Date(Date.now() + input.expiresIn * 1000) : null
+    await db.transaction(async (tx) => {
+      await tx.update(users).set({ banned: true, banReason: input.reason ?? null, banExpires, updatedAt: new Date() }).where(eq(users.id, target.id))
+      await tx.delete(sessions).where(eq(sessions.userId, target.id))
+    })
+    await audit({ actorUserId: context.get('user').id, actorIp: requestIp(context.req.raw.headers), event: 'member.banned', targetType: 'user', targetId: target.id, metadata: { reason: input.reason ?? null, expiresAt: banExpires?.toISOString() ?? null } })
+    return context.json({ member: publicUser({ ...target, banned: true, banReason: input.reason ?? null, banExpires }) })
+  })
+  app.post('/:id/unban', async (context) => {
+    const target = (await db.select().from(users).where(eq(users.id, context.req.param('id'))).limit(1))[0]
+    if (!target) return context.json({ error: 'Member not found' }, 404)
+    if (target.role === 'owner') return context.json({ error: 'The workspace owner cannot be unbanned through this endpoint' }, 409)
+    await db.update(users).set({ banned: false, banReason: null, banExpires: null, updatedAt: new Date() }).where(eq(users.id, target.id))
+    await audit({ actorUserId: context.get('user').id, actorIp: requestIp(context.req.raw.headers), event: 'member.unbanned', targetType: 'user', targetId: target.id })
+    return context.json({ member: publicUser({ ...target, banned: false, banReason: null, banExpires: null }) })
+  })
+  app.post('/:id/revoke-sessions', async (context) => {
+    const target = (await db.select().from(users).where(eq(users.id, context.req.param('id'))).limit(1))[0]
+    if (!target) return context.json({ error: 'Member not found' }, 404)
+    if (target.role === 'owner') return context.json({ error: 'The workspace owner sessions cannot be revoked through this endpoint' }, 409)
+    await db.delete(sessions).where(eq(sessions.userId, target.id))
+    await audit({ actorUserId: context.get('user').id, actorIp: requestIp(context.req.raw.headers), event: 'session.revoked', targetType: 'user', targetId: target.id, metadata: { scope: 'all' } })
+    return context.json({ ok: true })
+  })
+  app.post('/:id/transfer-ownership', async (context) => {
+    const actor = context.get('user')
+    if (actor.role !== 'owner') return context.json({ error: 'Workspace owner required' }, 403)
+    const target = (await db.select().from(users).where(eq(users.id, context.req.param('id'))).limit(1))[0]
+    if (!target) return context.json({ error: 'Member not found' }, 404)
+    if (target.role !== 'admin' && target.role !== 'member') return context.json({ error: 'Ownership can only be transferred to an administrator or member' }, 409)
+    await db.transaction(async (tx) => {
+      await tx.update(users).set({ role: 'admin', updatedAt: new Date() }).where(and(eq(users.id, actor.id), eq(users.role, 'owner')))
+      await tx.update(users).set({ role: 'owner', updatedAt: new Date() }).where(eq(users.id, target.id))
+    })
+    await audit({ actorUserId: actor.id, actorIp: requestIp(context.req.raw.headers), event: 'workspace.ownership_transferred', targetType: 'user', targetId: target.id, metadata: { previousOwnerId: actor.id } })
+    return context.json({ owner: publicUser({ ...target, role: 'owner' }) })
   })
   app.delete('/:id', async (context) => {
     const target = (await db.select().from(users).where(eq(users.id, context.req.param('id'))).limit(1))[0]

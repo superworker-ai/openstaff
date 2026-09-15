@@ -2,24 +2,28 @@ import { hkdfSync } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { APIError, betterAuth } from 'better-auth'
+import type { MiddlewareHandler } from 'hono'
 import { createAuthMiddleware, isAPIError } from 'better-auth/api'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { verifyPassword } from 'better-auth/crypto'
 import { admin } from 'better-auth/plugins/admin'
 import { adminAc, userAc } from 'better-auth/plugins/admin/access'
 import { magicLink } from 'better-auth/plugins/magic-link'
+import { twoFactor } from 'better-auth/plugins/two-factor'
+import { sso } from '@better-auth/sso'
 import { and, count, eq, gt, isNull } from 'drizzle-orm'
-import { createId, type IdKind } from '@openstaff/shared'
+import { createId, PLAN_LIMITS, type IdKind } from '@openstaff/shared'
 import type { AuditWriter } from '../audit.js'
 import { requestIp } from '../audit.js'
 import type { Config } from '../config.js'
 import type { Database } from '../db/index.js'
 import * as databaseSchema from '../db/schema.js'
-import { invitations, users } from '../db/schema.js'
+import { invitations, ssoProvider, users } from '../db/schema.js'
 import type { SendEmail } from '../email/index.js'
 import { magicLinkTemplate, resetPasswordTemplate, verifyEmailTemplate } from '../email/templates.js'
 import { verifyLegacyPassword } from './password.js'
-import { checkMemberPlan } from '../plan.js'
+import { checkMemberPlan, PlanLimitError } from '../plan.js'
+import { readWorkspaceAuthSettings } from './workspace-security.js'
 
 const modelIds: Record<string, IdKind> = {
   user: 'user', users: 'user', session: 'session', sessions: 'session', account: 'account',
@@ -54,41 +58,63 @@ function authUserId(context: { context: { newSession: { user: { id: string } } |
 }
 
 function statusCode(value: unknown): number {
-  return isAPIError(value) ? value.statusCode : 200
+  return isAPIError(value) ? value.statusCode : value instanceof Response ? value.status : 200
 }
+
+const emailDomain = (email: string) => email.split('@')[1]?.toLowerCase()
+const domainMatches = (email: string, domains: string) => domains.split(',').some((domain) => {
+  const value = emailDomain(email), expected = domain.trim().toLowerCase().replace(/^@/, '')
+  return Boolean(value && expected && (value === expected || value.endsWith(`.${expected}`)))
+})
 
 export function createAuth(config: Config, db: Database, dependencies: { sendEmail: SendEmail; audit: AuditWriter }) {
   const { sendEmail, audit } = dependencies
   const requireVerification = config.email.provider !== 'console'
+  const configuredSocialProviders = Object.keys(config.social) as Array<keyof Config['social']>
+
+  const hasSsoDomain = async (email: string) => (await db.select({ domain: ssoProvider.domain }).from(ssoProvider)).some((row) => domainMatches(email, row.domain))
+  const enforceSignup = async (value: unknown, headers: Headers | undefined, options: { afterCreate?: boolean; skipCode?: boolean } = {}) => {
+    const email = textField(value, 'email')?.trim().toLowerCase()
+    if (!email) return
+    const rawTotal = (await db.select({ value: count() }).from(users))[0]?.value ?? 0
+    const total = Math.max(0, rawTotal - (options.afterCreate ? 1 : 0))
+    const suppliedCode = headers?.get('x-signup-code') ?? textField(value, 'signupCode')
+    const admittedBySsoDomain = total > 0 && await hasSsoDomain(email)
+    if (!admittedBySsoDomain && !options.skipCode && config.signupCode && (total === 0 || config.authSignup === 'code') && suppliedCode !== config.signupCode) {
+      throw new APIError('FORBIDDEN', { code: 'invalid_signup_code', message: 'Invalid signup code' })
+    }
+    if (!admittedBySsoDomain && total > 0 && config.authSignup === 'code' && !config.signupCode) throw new APIError('FORBIDDEN', { code: 'signup_closed', message: 'Sign-up is closed' })
+    if (!admittedBySsoDomain && total > 0 && config.authSignup === 'invite') {
+      const pending = (await db.select({ id: invitations.id }).from(invitations).where(and(
+        eq(invitations.email, email), isNull(invitations.acceptedAt), isNull(invitations.revokedAt), gt(invitations.expiresAt, new Date().toISOString()),
+      )).limit(1))[0]
+      if (!pending) throw new APIError('FORBIDDEN', { code: 'invitation_required', message: 'A pending invitation is required' })
+    }
+    if (!options.afterCreate) {
+      const limit = await checkMemberPlan(db, config)
+      if (limit) throw new APIError('PAYMENT_REQUIRED', { ...limit.body(), message: limit.message })
+    }
+  }
+
   const plugins = [
     magicLink({
       storeToken: 'hashed',
       rateLimit: { window: 60, max: 5 },
       sendMagicLink: async ({ email, url }) => sendEmail({ to: email, ...magicLinkTemplate(url) }),
     }),
+    sso({
+      provisionUser: async ({ user, provider }) => {
+        if (!domainMatches(user.email, provider.domain)) throw new APIError('FORBIDDEN', { code: 'sso_domain_mismatch', message: 'The identity email does not match the SSO provider domain' })
+        await enforceSignup(user, undefined, { afterCreate: true })
+      },
+      domainVerification: { enabled: config.plan !== 'self-hosted' },
+      saml: { enableInResponseToValidation: true, allowIdpInitiated: false },
+      organizationProvisioning: { disabled: true },
+    }),
+    twoFactor({ issuer: 'OpenStaff', allowPasswordless: true, backupCodeOptions: { storeBackupCodes: 'encrypted' }, trustDeviceMaxAge: 60 * 60 * 24 * 30 }),
     // Only the owner may use Better Auth's admin endpoints; workspace admins use /api/members, which cannot touch the owner.
     admin({ defaultRole: 'member', adminRoles: ['owner'], roles: { owner: adminAc, admin: userAc, member: userAc } }),
   ]
-
-  const enforceSignup = async (value: unknown, headers: Headers | undefined) => {
-    const email = textField(value, 'email')?.trim().toLowerCase()
-    if (!email) return
-    const total = (await db.select({ value: count() }).from(users))[0]?.value ?? 0
-    const suppliedCode = headers?.get('x-signup-code') ?? textField(value, 'signupCode')
-    if (config.signupCode && (total === 0 || config.authSignup === 'code') && suppliedCode !== config.signupCode) {
-      throw new APIError('FORBIDDEN', { code: 'invalid_signup_code', message: 'Invalid signup code' })
-    }
-    if (total === 0) return
-    if (config.authSignup === 'code' && !config.signupCode) throw new APIError('FORBIDDEN', { code: 'signup_closed', message: 'Sign-up is closed' })
-    if (config.authSignup === 'invite') {
-      const pending = (await db.select({ id: invitations.id }).from(invitations).where(and(
-        eq(invitations.email, email), isNull(invitations.acceptedAt), isNull(invitations.revokedAt), gt(invitations.expiresAt, new Date().toISOString()),
-      )).limit(1))[0]
-      if (!pending) throw new APIError('FORBIDDEN', { code: 'invitation_required', message: 'A pending invitation is required' })
-    }
-    const limit = await checkMemberPlan(db, config)
-    if (limit) throw new APIError('PAYMENT_REQUIRED', { ...limit.body(), message: limit.message })
-  }
 
   return betterAuth({
     appName: 'OpenStaff',
@@ -137,8 +163,11 @@ export function createAuth(config: Config, db: Database, dependencies: { sendEma
       sendOnSignUp: requireVerification,
       sendVerificationEmail: async ({ user, url }) => sendEmail({ to: user.email, ...verifyEmailTemplate(url) }),
     },
+    socialProviders: config.social,
+    account: { accountLinking: { enabled: true, trustedProviders: configuredSocialProviders } },
     databaseHooks: {
-      user: { create: { before: async (user) => {
+      user: { create: { before: async (user, context) => {
+        await enforceSignup(user, context?.headers, { skipCode: context?.path === '/sign-up/email' })
         const total = (await db.select({ value: count() }).from(users))[0]?.value ?? 0
         return { data: { ...user, role: total === 0 ? 'owner' : 'member' } }
       } } },
@@ -149,6 +178,14 @@ export function createAuth(config: Config, db: Database, dependencies: { sendEma
         if (context.path === '/sign-in/magic-link') {
           const email = textField(context.body, 'email')?.trim().toLowerCase()
           if (email && !(await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1))[0]) await enforceSignup(context.body, context.headers)
+        }
+        if (['/sign-in/email', '/sign-in/magic-link', '/request-password-reset'].includes(context.path)) {
+          const email = textField(context.body, 'email')?.trim().toLowerCase()
+          if (!email) return
+          const providers = await db.select({ domain: ssoProvider.domain }).from(ssoProvider)
+          if (!providers.some((row) => domainMatches(email, row.domain)) || !(await readWorkspaceAuthSettings(db)).ssoOnly) return
+          const target = (await db.select({ role: users.role }).from(users).where(eq(users.email, email)).limit(1))[0]
+          if (target?.role !== 'owner') throw new APIError('FORBIDDEN', { code: 'sso_required', message: 'Your organisation requires single sign-on' })
         }
       }),
       after: createAuthMiddleware(async (context) => {
@@ -170,6 +207,21 @@ export function createAuth(config: Config, db: Database, dependencies: { sendEma
           await audit({ ...common, event: 'auth.password_reset', targetType: 'auth', targetId: 'password' })
         } else if (context.path === '/verify-email' && !failed) {
           await audit({ ...common, event: 'auth.email_verified', targetType: 'user', targetId: actorUserId ?? 'unknown' })
+        } else if (context.path === '/two-factor/verify-totp' && !failed && context.context.session?.user) {
+          await audit({ ...common, event: 'auth.two_factor_enabled', targetType: 'user', targetId: actorUserId ?? 'unknown' })
+        } else if (context.path === '/two-factor/disable' && !failed) {
+          await audit({ ...common, event: 'auth.two_factor_disabled', targetType: 'user', targetId: actorUserId ?? 'unknown' })
+        } else if (context.path === '/sso/register' && !failed) {
+          await audit({ ...common, event: 'sso.provider_created', targetType: 'sso_provider', targetId: textField(context.body, 'providerId') ?? 'unknown' })
+        } else if (context.path === '/sso/update-provider' && !failed) {
+          await audit({ ...common, event: 'sso.provider_updated', targetType: 'sso_provider', targetId: textField(context.body, 'providerId') ?? 'unknown' })
+        } else if (context.path === '/sso/delete-provider' && !failed) {
+          await audit({ ...common, event: 'sso.provider_deleted', targetType: 'sso_provider', targetId: textField(context.body, 'providerId') ?? 'unknown' })
+        } else if ((context.path.startsWith('/sso/callback') || context.path.startsWith('/sso/saml2/sp/acs/')) && !failed && actorUserId) {
+          await audit({ ...common, event: 'auth.sign_in', targetType: 'user', targetId: actorUserId, metadata: { method: 'sso' } })
+        } else if (context.path.startsWith('/callback/') && !failed && actorUserId) {
+          const provider = context.path.slice('/callback/'.length)
+          if (configuredSocialProviders.includes(provider as keyof Config['social'])) await audit({ ...common, event: 'auth.sign_in', targetType: 'user', targetId: actorUserId, metadata: { method: `social:${provider}` } })
         }
       }),
     },
@@ -185,4 +237,15 @@ export const disabledAuthPaths: ReadonlySet<string> = new Set(['create-user', 's
 export function authHandler(auth: OpenStaffAuth) {
   return (context: { req: { path: string; raw: Request }; json: (body: { error: string }, status: 404) => Response }) =>
     disabledAuthPaths.has(context.req.path) ? context.json({ error: 'Not found' }, 404) : auth.handler(context.req.raw)
+}
+
+export function ssoMutationGuard(auth: OpenStaffAuth, config: Pick<Config, 'plan'>): MiddlewareHandler {
+  return async (context, next) => {
+    const session = await auth.api.getSession({ headers: context.req.raw.headers })
+    if (!session) return context.json({ error: 'Authentication required' }, 401)
+    const role = typeof session.user.role === 'string' ? session.user.role : 'member'
+    if (role !== 'owner' && role !== 'admin') return context.json({ error: 'Workspace administrator required' }, 403)
+    if (!PLAN_LIMITS[config.plan].sso) return context.json(new PlanLimitError('sso', config.plan, false).body(), 402)
+    await next()
+  }
 }

@@ -48,10 +48,13 @@
   },
   "devDependencies": {
     "@ai-sdk/provider": "^3.0.16",
+    "@better-auth/utils": "0.4.2",
     "@types/dockerode": "^4.0.1",
     "@types/node": "^22.19.1",
     "@types/ws": "^8.18.1",
     "drizzle-kit": "^0.31.10",
+    "jose": "6.2.3",
+    "samlify": "2.13.1",
     "tsup": "^8.5.1",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",

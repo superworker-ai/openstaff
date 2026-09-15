@@ -19,7 +19,7 @@ import { resolveModel, type ModelResolver } from './agent/models.js'
 import { TurnScheduler } from './rooms/scheduler.js'
 import { requireAuth } from './auth/session.js'
 import { publicUser } from './auth/session.js'
-import { authHandler, createAuth, type OpenStaffAuth } from './auth/better-auth.js'
+import { authHandler, createAuth, ssoMutationGuard, type OpenStaffAuth } from './auth/better-auth.js'
 import { botRoutes } from './api/bots.js'
 import { roomRoutes } from './api/rooms.js'
 import { approvalRoutes, turnRoutes } from './api/turns.js'
@@ -50,6 +50,7 @@ import { createMailer } from './email/index.js'
 import { createAuditWriter } from './audit.js'
 import { invitationRoutes, memberRoutes, publicInvitationRoutes } from './api/members.js'
 import { auditRoutes } from './api/audit.js'
+import { securityRoutes } from './api/security.js'
 
 export interface CreateApplicationOptions {
   composioClient?: ComposioClient
@@ -120,16 +121,19 @@ export async function createApplication(options: CreateApplicationOptions = {}):
     try { await database.db.run(sql`SELECT 1`); return context.json({ ok: true }) } catch { return context.json({ ok: false }, 503) }
   })
   app.get('/api/plan', (context) => context.json({ plan: config.plan, state: config.state, managedKeys: config.managedKeys, billingUrl: config.billingUrl ?? null, limits: PLAN_LIMITS[config.plan] }))
-  app.get('/api/auth-config', async (context) => context.json({ password: true, magicLink: true, signup: config.authSignup, socialProviders: [], sso: Boolean((await database.db.select({ id: ssoProvider.id }).from(ssoProvider).limit(1))[0]), emailVerification: config.email.provider !== 'console' }))
+  app.get('/api/auth-config', async (context) => context.json({ password: true, magicLink: true, signup: config.authSignup, socialProviders: Object.keys(config.social), sso: Boolean((await database.db.select({ id: ssoProvider.id }).from(ssoProvider).limit(1))[0]), emailVerification: config.email.provider !== 'console' }))
+  const guardSsoMutation = ssoMutationGuard(auth, config)
+  for (const path of ['/api/auth/sso/register', '/api/auth/sso/update-provider', '/api/auth/sso/delete-provider', '/api/auth/sso/request-domain-verification', '/api/auth/sso/verify-domain']) app.use(path, guardSsoMutation)
   app.on(['GET', 'POST'], '/api/auth/*', authHandler(auth))
   app.use('/api/*', suspendedGate(config.state))
   app.route('/api/invitations', publicInvitationRoutes(dependencies))
   app.route('/api/hooks', hookRoutes(dependencies))
   app.route('/api/usage/export', usageExportRoutes(dependencies))
-  app.use('/api/*', requireAuth(auth))
+  app.use('/api/*', requireAuth(auth, database.db))
   app.route('/api/invitations', invitationRoutes(dependencies))
   app.route('/api/members', memberRoutes(dependencies))
   app.route('/api/audit', auditRoutes(dependencies))
+  app.route('/api/security', securityRoutes(dependencies))
   app.route('/api/bots', botRoutes(dependencies))
   app.route('/api/rooms', uploadRoutes(dependencies))
   app.route('/api/usage', usageRoutes(dependencies))
