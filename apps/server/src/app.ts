@@ -19,7 +19,7 @@ import { resolveModel, type ModelResolver } from './agent/models.js'
 import { TurnScheduler } from './rooms/scheduler.js'
 import { requireAuth } from './auth/session.js'
 import { publicUser } from './auth/session.js'
-import { createAuth, type OpenStaffAuth } from './auth/better-auth.js'
+import { authHandler, createAuth, type OpenStaffAuth } from './auth/better-auth.js'
 import { botRoutes } from './api/bots.js'
 import { roomRoutes } from './api/rooms.js'
 import { approvalRoutes, turnRoutes } from './api/turns.js'
@@ -121,7 +121,7 @@ export async function createApplication(options: CreateApplicationOptions = {}):
   })
   app.get('/api/plan', (context) => context.json({ plan: config.plan, state: config.state, managedKeys: config.managedKeys, billingUrl: config.billingUrl ?? null, limits: PLAN_LIMITS[config.plan] }))
   app.get('/api/auth-config', async (context) => context.json({ password: true, magicLink: true, signup: config.authSignup, socialProviders: [], sso: Boolean((await database.db.select({ id: ssoProvider.id }).from(ssoProvider).limit(1))[0]), emailVerification: config.email.provider !== 'console' }))
-  app.on(['GET', 'POST'], '/api/auth/*', (context) => auth.handler(context.req.raw))
+  app.on(['GET', 'POST'], '/api/auth/*', authHandler(auth))
   app.use('/api/*', suspendedGate(config.state))
   app.route('/api/invitations', publicInvitationRoutes(dependencies))
   app.route('/api/hooks', hookRoutes(dependencies))

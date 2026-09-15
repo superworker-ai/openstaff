@@ -66,7 +66,8 @@ export function createAuth(config: Config, db: Database, dependencies: { sendEma
       rateLimit: { window: 60, max: 5 },
       sendMagicLink: async ({ email, url }) => sendEmail({ to: email, ...magicLinkTemplate(url) }),
     }),
-    admin({ defaultRole: 'member', adminRoles: ['owner', 'admin'], roles: { owner: adminAc, admin: adminAc, member: userAc } }),
+    // Only the owner may use Better Auth's admin endpoints; workspace admins use /api/members, which cannot touch the owner.
+    admin({ defaultRole: 'member', adminRoles: ['owner'], roles: { owner: adminAc, admin: userAc, member: userAc } }),
   ]
 
   const enforceSignup = async (value: unknown, headers: Headers | undefined) => {
@@ -177,3 +178,11 @@ export function createAuth(config: Config, db: Database, dependencies: { sendEma
 }
 
 export type OpenStaffAuth = ReturnType<typeof createAuth>
+
+// Admin endpoints that bypass the sign-up policy, plan limits, the single-owner rule, or grant impersonation.
+export const disabledAuthPaths: ReadonlySet<string> = new Set(['create-user', 'set-role', 'update-user', 'set-user-password', 'impersonate-user', 'stop-impersonating'].map((name) => `/api/auth/admin/${name}`))
+
+export function authHandler(auth: OpenStaffAuth) {
+  return (context: { req: { path: string; raw: Request }; json: (body: { error: string }, status: 404) => Response }) =>
+    disabledAuthPaths.has(context.req.path) ? context.json({ error: 'Not found' }, 404) : auth.handler(context.req.raw)
+}

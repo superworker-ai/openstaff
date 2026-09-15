@@ -17,7 +17,7 @@ import type { EmailMessage } from '../email/index.js'
 import { consoleMailer } from '../email/console.js'
 import { signedIn, TEST_PASSWORD } from '../test/auth.js'
 import { requireAuth } from './session.js'
-import { createAuth } from './better-auth.js'
+import { authHandler, createAuth } from './better-auth.js'
 import { hashPassword } from './password.js'
 
 const directories: string[] = []
@@ -31,7 +31,7 @@ async function harness(overrides: Partial<Config> = {}, transport?: (message: Em
   const sent: EmailMessage[] = [], sendEmail = transport ?? (async (message: EmailMessage) => { sent.push(message) })
   const audit = createAuditWriter(database.db), auth = createAuth(config, database.db, { sendEmail, audit })
   const app = new Hono<AppEnv>()
-  app.on(['GET', 'POST'], '/api/auth/*', (context) => auth.handler(context.req.raw))
+  app.on(['GET', 'POST'], '/api/auth/*', authHandler(auth))
   app.route('/api/invitations', publicInvitationRoutes({ db: database.db }))
   app.use('/api/*', requireAuth(auth))
   app.route('/api/invitations', invitationRoutes({ db: database.db, config, sendEmail, audit }))
@@ -149,9 +149,25 @@ it('signs in a legacy password after the migration copies it to account', async 
   const config = readConfig({ dataDir: directory, authSecret: 'legacy-test-secret-at-least-thirty-two-characters', authSignup: 'open', email: { provider: 'console' } })
   const auth = createAuth(config, db, { sendEmail: async () => undefined, audit: createAuditWriter(db) })
   const app = new Hono()
-  app.on(['GET', 'POST'], '/api/auth/*', (context) => auth.handler(context.req.raw))
+  app.on(['GET', 'POST'], '/api/auth/*', authHandler(auth))
   const response = await app.request('/api/auth/sign-in/email', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'legacy@example.test', password }) })
   expect(response.status).toBe(200); expect(response.headers.get('set-cookie')).toContain('openstaff.session_token')
   expect((await db.select({ password: account.password }).from(account).where(eq(account.userId, userId)).limit(1))[0]?.password).toMatch(/^scrypt:/)
   client.close()
+})
+
+it('reserves Better Auth admin endpoints for the owner and disables the dangerous ones', async () => {
+  const h = await harness()
+  try {
+    const owner = await signedIn(h, { email: 'owner@example.test' })
+    const admin = await signedIn(h, { email: 'admin@example.test', role: 'admin' })
+    const list = (cookie: string) => h.app.request('/api/auth/admin/list-users', { headers: { cookie } })
+    expect((await list(owner.cookie)).status).toBe(200)
+    expect((await list(admin.cookie)).status).toBe(403)
+    for (const name of ['impersonate-user', 'set-role', 'create-user', 'update-user', 'set-user-password', 'stop-impersonating']) {
+      const response = await h.app.request(`/api/auth/admin/${name}`, { method: 'POST', headers: { cookie: owner.cookie, 'content-type': 'application/json' }, body: JSON.stringify({ userId: admin.user.id, role: 'owner' }) })
+      expect(response.status, name).toBe(404)
+    }
+    expect((await h.database.db.select({ role: users.role }).from(users).where(eq(users.id, admin.user.id)))[0]?.role).toBe('admin')
+  } finally { h.close() }
 })
