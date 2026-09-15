@@ -24,3 +24,30 @@ describe('hosted configuration', () => {
     expect(() => readConfig({ plan: 'starter' })).toThrow('COMPUTER_DRIVER=local is not allowed on hosted plans')
   })
 })
+
+describe('authentication configuration', () => {
+  it('keeps the zero-configuration developer defaults', () => {
+    vi.stubEnv('SIGNUP_CODE', '')
+    vi.stubEnv('AUTH_SIGNUP', '')
+    vi.stubEnv('EMAIL_PROVIDER', '')
+    expect(readConfig()).toMatchObject({ authSignup: 'open', email: { provider: 'console' } })
+  })
+
+  it('defaults to code sign-up when the legacy code is configured', () => {
+    vi.stubEnv('SIGNUP_CODE', 'join-us')
+    vi.stubEnv('AUTH_SIGNUP', '')
+    expect(readConfig()).toMatchObject({ authSignup: 'code', signupCode: 'join-us' })
+  })
+
+  it.each([['postmark', 'EMAIL_PROVIDER must be one of console, smtp, resend'], ['smtp', 'EMAIL_FROM is required when EMAIL_PROVIDER is not console']])('rejects invalid email configuration for %s', (provider, message) => {
+    vi.stubEnv('EMAIL_PROVIDER', provider)
+    vi.stubEnv('EMAIL_FROM', '')
+    expect(() => readConfig()).toThrow(message)
+  })
+
+  it('merges the public URL and additional trusted origins', () => {
+    vi.stubEnv('PUBLIC_APP_URL', 'https://staff.example')
+    vi.stubEnv('AUTH_TRUSTED_ORIGINS', 'https://admin.example, https://staff.example')
+    expect(readConfig().trustedOrigins).toEqual(['https://staff.example', 'https://admin.example'])
+  })
+})
