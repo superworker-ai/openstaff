@@ -1,5 +1,5 @@
 import { createServerFn } from '@tanstack/react-start'
-import type { Approval, Avatar, Bot, Message, PublicTurn, Room, Task, User } from '@openstaff/shared'
+import type { Approval, Avatar, Bot, Message, PublicTurn, Room, Task, User, WorkspacePlanDetails } from '@openstaff/shared'
 import { serverApi } from './server-api'
 
 export interface RoomMemberView {
@@ -26,6 +26,7 @@ export interface RoomData {
 }
 
 export const loadMe = createServerFn({ method: 'GET' }).handler(() => serverApi<{ user: User }>('/api/auth/me'))
+export const loadPlan = createServerFn({ method: 'GET' }).handler(() => serverApi<WorkspacePlanDetails>('/api/plan'))
 
 export const loadRooms = createServerFn({ method: 'GET' }).handler(() => serverApi<{ rooms: RoomView[] }>('/api/rooms'))
 
