@@ -8,8 +8,8 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
     headers: { ...(init?.body instanceof FormData ? {} : { 'content-type': 'application/json' }), ...init?.headers },
     credentials: 'same-origin',
   })
-  const body = await response.json() as { error?: string; code?: string }
-  if (!response.ok) throw new ApiError(typeof body.error === 'string' ? body.error : 'Request failed', typeof body.code === 'string' ? body.code : undefined)
+  const body = await response.json() as { error?: string; message?: string; code?: string }
+  if (!response.ok) throw new ApiError(typeof body.error === 'string' ? body.error : typeof body.message === 'string' ? body.message : 'Request failed', typeof body.code === 'string' ? body.code : undefined)
   return body as T
 }
 

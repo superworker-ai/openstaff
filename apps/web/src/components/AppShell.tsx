@@ -4,6 +4,7 @@ import { Bot, LogOut, Plus, Search, ShoppingBag, Users } from 'lucide-react'
 import type { Bot as BotType, User } from '@openstaff/shared'
 import type { RoomView } from '../lib/loaders'
 import { api, formatTime } from '../lib/api'
+import { authClient } from '../lib/auth-client'
 import { sortRooms } from '../lib/room-order'
 import { BotAvatar, HumanAvatar } from './BotAvatar'
 import { BotWorkstation } from './BotWorkstation'
@@ -48,7 +49,7 @@ export function AppShell({ rooms, currentRoomId, currentUser, bots, users, child
       <label className="mb-4 flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-zinc-500"><Search size={15} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search" className="w-full bg-transparent outline-none" /></label>
       <nav className="scrollbar-thin min-h-0 flex-1 overflow-y-auto">{sections.map(([section, values]) => <section key={section} className="mb-5"><h2 className="mb-1 px-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-400">{section}</h2>{values.map((room) => { const name = room.name ?? roomBots(room, bots)[0]?.name ?? 'Room'; return <Link key={room.id} to="/rooms/$roomId" params={{ roomId: room.id }} className={`mb-1 grid grid-cols-[auto_minmax(0,1fr)] gap-2 rounded-xl p-2 ${currentRoomId === room.id ? 'bg-white' : 'hover:bg-white/70'}`}><RoomAvatar room={room} bots={bots} /><div className="min-w-0"><div className="flex justify-between gap-2"><span className="truncate font-medium">{name}</span><time className="text-[11px] text-zinc-400">{formatTime(room.lastMessageAt)}</time></div><p className="truncate text-xs text-zinc-500">{room.lastMessagePreview || 'Start a conversation'}</p></div></Link>})}</section>)}</nav>
       <Link to="/marketplace" className="mb-2 flex items-center gap-3 rounded-xl px-3 py-2.5 hover:bg-white"><ShoppingBag size={17} />Marketplace</Link>
-      <div className="flex items-center gap-2 border-t border-zinc-200 pt-3"><HumanAvatar name={currentUser.name} size={34} /><div className="min-w-0 flex-1"><div className="truncate text-sm font-medium">{currentUser.name}</div><Link to="/settings" className="text-xs text-zinc-500">Settings</Link></div><button aria-label="Log out" onClick={async () => { await api('/api/auth/logout', { method: 'POST' }); await navigate({ to: '/login' }) }} className="rounded-lg p-2 hover:bg-white"><LogOut size={16} /></button></div>
+      <div className="flex items-center gap-2 border-t border-zinc-200 pt-3"><HumanAvatar name={currentUser.name} size={34} /><div className="min-w-0 flex-1"><div className="truncate text-sm font-medium">{currentUser.name}</div><Link to="/settings" className="text-xs text-zinc-500">Settings</Link></div><button aria-label="Log out" onClick={async () => { await authClient.signOut(); await navigate({ to: '/login' }) }} className="rounded-lg p-2 hover:bg-white"><LogOut size={16} /></button></div>
     </aside>
     {children}
     {groupOpen && <GroupDialog bots={bots} users={users} currentUser={currentUser} onClose={() => setGroupOpen(false)} onCreated={(roomId) => navigate({ to: '/rooms/$roomId', params: { roomId } })} />}
