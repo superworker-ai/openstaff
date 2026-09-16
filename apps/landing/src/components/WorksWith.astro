@@ -1,15 +1,14 @@
 ---
 import { worksWith } from '../content/landing'
 import Container from './Container.astro'
-
-
+import ServiceLogo from './ServiceLogo.astro'
 ---
 
 <section class="works" aria-labelledby="works-title">
   <Container>
     <p id="works-title">{worksWith.title}</p>
     <div class="chips" aria-label="Supported integrations">
-      {worksWith.tools.map((tool) => <span>{tool}</span>)}
+      {worksWith.tools.map((tool) => <span><ServiceLogo name={tool} />{tool}</span>)}
     </div>
   </Container>
 </section>
@@ -36,10 +35,13 @@ import Container from './Container.astro'
   }
 
   span {
-    padding: 0.4375rem 0.75rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.625rem 0.875rem;
     border-radius: 999px;
     background: var(--color-surface-3);
-    color: var(--color-fg-muted);
+    color: var(--color-fg);
     font-size: 0.8125rem;
     font-weight: 500;
     line-height: 1.2;

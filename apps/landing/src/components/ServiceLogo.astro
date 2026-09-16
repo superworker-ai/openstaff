@@ -1,0 +1,40 @@
+---
+const logos = {
+  Slack: { src: 'integrations/slack', monochrome: false },
+  Gmail: { src: 'integrations/gmail', monochrome: false },
+  GitHub: { src: 'integrations/github', monochrome: true },
+  Notion: { src: 'integrations/notion', monochrome: true },
+  Linear: { src: 'integrations/linear', monochrome: true },
+  'Google Calendar': { src: 'integrations/google-calendar', monochrome: false },
+  Stripe: { src: 'integrations/stripe', monochrome: true },
+  '+600 more via Composio': { src: 'integrations/composio', monochrome: false },
+  'xAI Grok': { src: 'providers/grok', monochrome: true },
+  'Anthropic Claude': { src: 'providers/claude', monochrome: true },
+  OpenAI: { src: 'providers/openai', monochrome: true },
+  OpenCode: { src: 'providers/opencode', monochrome: true },
+  'Vercel AI Gateway': { src: 'providers/vercel', monochrome: true },
+} as const
+
+interface Props { name: keyof typeof logos }
+const { name } = Astro.props
+const logo = logos[name]
+---
+
+<img
+  class:list={['service-logo', { monochrome: logo.monochrome, wide: name === '+600 more via Composio' }]}
+  src={`/logos/${logo.src}.svg`}
+  alt=""
+  width="20"
+  height="20"
+  loading="lazy"
+  decoding="async"
+/>
+
+<style>
+  .service-logo { display: block; flex: 0 0 auto; width: 1.25rem; height: 1.25rem; object-fit: contain; }
+  .service-logo.wide { width: 1.75rem; }
+  :global(html[data-theme='dark']) .monochrome { filter: invert(1); }
+  @media (prefers-color-scheme: dark) {
+    :global(html:not([data-theme])) .monochrome { filter: invert(1); }
+  }
+</style>

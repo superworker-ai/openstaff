@@ -2,8 +2,7 @@
 import { models } from '../content/landing'
 import Container from './Container.astro'
 import Eyebrow from './Eyebrow.astro'
-
-
+import ServiceLogo from './ServiceLogo.astro'
 ---
 
 <section class="models" aria-labelledby="models">
@@ -14,7 +13,7 @@ import Eyebrow from './Eyebrow.astro'
       <p>{models.body}</p>
     </div>
     <div class="model-chips" aria-label="Supported model providers">
-      {models.providers.map((model) => <span>{model}</span>)}
+      {models.providers.map((model) => <span><ServiceLogo name={model} />{model}</span>)}
     </div>
   </Container>
 </section>
@@ -25,6 +24,6 @@ import Eyebrow from './Eyebrow.astro'
   h2 { margin: 0.875rem 0 0; font-size: 1.75rem; font-weight: 600; letter-spacing: -0.02em; line-height: 1.15; }
   p { margin: 1.25rem auto 0; color: var(--color-fg-muted); line-height: 1.6; }
   .model-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.625rem; margin-top: 2rem; }
-  .model-chips span { padding: 0.625rem 0.875rem; border: 1px solid var(--color-line); border-radius: 999px; background: var(--color-surface-3); color: var(--color-fg-muted); font-size: 0.8125rem; font-weight: 500; }
+  .model-chips span { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.625rem 0.875rem; border: 1px solid var(--color-line); border-radius: 999px; background: var(--color-surface-3); color: var(--color-fg); font-size: 0.8125rem; font-weight: 500; }
   @media (min-width: 64rem) { .models { padding-block: 6rem; } h2 { font-size: 2.25rem; } }
 </style>
