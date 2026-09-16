@@ -26,7 +26,7 @@ export function MembersPopover({ room, bots, users, presence, open, onOpenChange
   const usage = useUsage()
   return <Popover open={open} onOpenChange={onOpenChange}>
     <PopoverAnchor asChild>{trigger}</PopoverAnchor>
-    <PopoverContent label="Members" align="start" className="w-[360px] p-3">
+    <PopoverContent label="Members" align="start" className="max-h-[calc(100dvh-1rem)] w-[min(360px,calc(100vw-1rem))] overflow-y-auto p-3">
       <h2 className="mb-3 px-1 text-sm font-semibold">Members</h2>
       <div className="space-y-1.5">
         {room.members.map((member) => {

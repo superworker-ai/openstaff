@@ -113,21 +113,21 @@ export function ComputerPane({ room, bots, turns, tasks, liveEvents, me, onClose
     return <div key={task.id} className="activity-task">{owner ? <BotAvatar {...owner.avatar} size={26} label={owner.name} /> : <FileText size={20} className="text-fg-muted" />}<div><p>{task.title}</p><p>{[owner?.name, task.status.replaceAll('_', ' ')].filter(Boolean).join(' · ')}</p></div></div>
   })
 
-  return <aside className="h-full min-h-0 bg-surface p-3 pl-0" aria-label={title}>
-    <div ref={monitor} className="h-full min-h-0 overflow-hidden rounded-2xl border border-line-strong bg-screen">
+  return <aside className="h-full min-h-0 bg-surface p-3 pl-0 max-lg:p-0" aria-label={title}>
+    <div ref={monitor} className="h-full min-h-0 overflow-hidden rounded-2xl border border-line-strong bg-screen max-lg:rounded-none max-lg:border-0">
       <div className="computer-monitor-content flex h-full min-h-0 flex-col">
-      <div className="flex h-8 shrink-0 items-center justify-between gap-3 border-b border-glass-line bg-glass-strong px-2.5 text-xs text-fg backdrop-blur">
+      <div className="flex h-8 shrink-0 items-center justify-between gap-2 border-b border-glass-line bg-glass-strong px-2.5 text-xs text-fg backdrop-blur max-lg:h-[52px] max-lg:px-2">
         <div className="flex min-w-0 items-center gap-2">
           {bot ? <BotAvatar {...bot.avatar} size={16} label={bot.name} animate /> : <BrandMark size={16} />}
           <span className="truncate font-medium">{title}</span>
-          <span className="truncate rounded-full border border-glass-line bg-glass-tile px-2 py-0.5 text-[11px] text-fg-muted">{stateLabel}</span>
+          <span className="truncate rounded-full border border-glass-line bg-glass-tile px-2 py-0.5 text-[11px] text-fg-muted max-[379px]:hidden">{stateLabel}</span>
         </div>
         <div className="flex shrink-0 items-center gap-1">
-          <time className="mr-1 whitespace-nowrap text-[11px] text-fg-muted">{now === null ? '' : localClock(now)}</time>
-          <IconButton label="Toggle activity" aria-pressed={activityOpen} onClick={() => setActivityOpen((value) => !value)} className="h-7 w-7"><ListTree size={14} /></IconButton>
-          <IconButton label="Reconnect desktop" disabled={restarting} onClick={() => void reconnect()} className="h-7 w-7"><RefreshCw size={14} /></IconButton>
-          <IconButton label="Open desktop fullscreen" onClick={() => monitor.current?.requestFullscreen()} className="h-7 w-7"><Maximize2 size={14} /></IconButton>
-          <IconButton label="Close computer" onClick={onClose} className="h-7 w-7"><X size={14} /></IconButton>
+          <time className="mr-1 whitespace-nowrap text-[11px] text-fg-muted max-[639px]:hidden">{now === null ? '' : localClock(now)}</time>
+          <IconButton label="Toggle activity" aria-pressed={activityOpen} onClick={() => setActivityOpen((value) => !value)} className="h-7 w-7 max-lg:h-[44px] max-lg:w-[44px]"><ListTree size={14} /></IconButton>
+          <IconButton label="Reconnect desktop" disabled={restarting} onClick={() => void reconnect()} className="h-7 w-7 max-lg:h-[44px] max-lg:w-[44px]"><RefreshCw size={14} /></IconButton>
+          <IconButton label="Open desktop fullscreen" onClick={() => monitor.current?.requestFullscreen()} className="h-7 w-7 max-lg:h-[44px] max-lg:w-[44px]"><Maximize2 size={14} /></IconButton>
+          <IconButton label="Close computer" onClick={onClose} className="h-7 w-7 max-lg:h-[44px] max-lg:w-[44px]"><X size={14} /></IconButton>
         </div>
       </div>
       {data?.detail?.startsWith('Recreated ') && dismissedNotice !== data.detail && <div className="flex shrink-0 items-center justify-between gap-2 border-b border-waiting/20 bg-waiting/10 px-3 py-1.5 text-xs text-fg" role="status"><span className="truncate">{data.detail}</span><button type="button" aria-label="Dismiss recreation notice" onClick={() => setDismissedNotice(data.detail)} className="text-fg-muted hover:text-fg">×</button></div>}
@@ -138,7 +138,7 @@ export function ComputerPane({ room, bots, turns, tasks, liveEvents, me, onClose
             <div aria-hidden="true" className="absolute -inset-6 motion-safe:animate-[wallpaper-drift_60s_ease-in-out_infinite]" style={wallpaper(new Date(now ?? 0).getHours(), resolved)} />
             {screenshotUrl && <><img src={screenshotUrl} alt={String(screenshot?.payload.title ?? (screenshot?.payload.source === 'desktop' ? 'Desktop screenshot' : 'Browser screenshot'))} className="absolute inset-0 h-full w-full object-cover opacity-60" /><span className="absolute left-3 top-3 rounded-full border border-glass-line bg-glass-strong px-2 py-1 text-[11px] text-fg-muted backdrop-blur">Last screenshot</span></>}
             <div className="relative z-10 flex min-h-full items-center justify-center px-5 py-20">
-              <div className="w-full max-w-[440px] rounded-2xl border border-glass-line bg-glass p-7 text-center shadow-glass backdrop-blur-xl">
+              <div className="w-full max-w-[440px] rounded-2xl border border-glass-line bg-glass p-7 text-center shadow-glass backdrop-blur-xl max-[639px]:p-5">
                 <span className="mx-auto grid h-14 w-14 place-items-center rounded-xl bg-glass-tile text-fg"><Monitor size={27} /></span>
                 <h2 className="mt-5 text-xl font-semibold text-fg">{bot ? `${bot.name} works here` : 'Your team works here'}</h2>
                 <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-fg-muted">{bot ? `Ask ${bot.name} for anything that needs a browser, files, or a terminal and it happens on this screen, live. Step in and take the wheel whenever you like.` : 'Anything a bot in this room does with a browser, files, or a terminal shows up on this screen, live. Step in and take the wheel whenever you like.'}</p>
@@ -153,7 +153,7 @@ export function ComputerPane({ room, bots, turns, tasks, liveEvents, me, onClose
                 </div>
               </div>
             </div>
-            <div aria-hidden="true" className="absolute left-4 top-1/2 z-20 flex -translate-y-1/2 flex-col gap-1 rounded-xl border border-glass-line bg-glass-strong p-1.5 shadow-glass backdrop-blur-xl">
+            <div aria-hidden="true" className="absolute left-4 top-1/2 z-20 flex -translate-y-1/2 flex-col gap-1 rounded-xl border border-glass-line bg-glass-strong p-1.5 shadow-glass backdrop-blur-xl max-[639px]:hidden">
               <span className="grid h-9 w-9 place-items-center rounded-lg text-fg-muted"><Globe2 size={18} /></span>
               <span className="grid h-9 w-9 place-items-center rounded-lg text-fg-muted"><Folder size={18} /></span>
               <span className="grid h-9 w-9 place-items-center rounded-lg text-fg-muted"><Terminal size={18} /></span>

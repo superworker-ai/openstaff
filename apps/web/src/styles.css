@@ -96,7 +96,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 @layer base { :focus-visible { outline: 2px solid var(--color-ring); outline-offset: 2px; } }
 
 .scrollbar-thin { scrollbar-width: thin; scrollbar-color: var(--color-scrollbar) transparent; }
-.message-markdown { font-size: 15px; line-height: 1.55; }
+.message-markdown { min-width: 0; overflow-wrap: anywhere; font-size: 15px; line-height: 1.55; }
 .message-markdown p { margin: 0; }
 .message-markdown p + p { margin-top: .65rem; }
 .message-markdown ul, .message-markdown ol { margin: .5rem 0 .5rem 1.2rem; }
@@ -104,7 +104,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .message-markdown pre { overflow-x: auto; border: 1px solid var(--color-line-strong); border-radius: var(--radius-md); background: var(--color-surface-3); color: var(--color-fg); padding: .75rem; }
 .message-markdown code { border-radius: .3rem; background: var(--color-surface-3); padding: .1rem .3rem; font-size: .86em; }
 .message-markdown pre code { background: transparent; padding: 0; }
-.message-markdown table { width: 100%; border-collapse: collapse; }
+.message-markdown table { display: block; width: 100%; overflow-x: auto; border-collapse: collapse; }
 .message-markdown th, .message-markdown td { border: 1px solid var(--color-line); padding: .4rem .55rem; text-align: left; }
 .message-markdown blockquote { margin: .65rem 0; border-left: 2px solid var(--color-line-strong); padding-left: .8rem; color: var(--color-fg-muted); }
 @keyframes ui-overlay-in { from { opacity: 0; transform: scale(.97); } to { opacity: 1; transform: scale(1); } }

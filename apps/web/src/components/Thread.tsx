@@ -80,7 +80,7 @@ function ModelPicker({ bot, roomId, onError }: { bot: Bot; roomId: string; onErr
     finally { setBusy(false) }
   }
   return <DropdownMenu>
-    <DropdownMenuTrigger asChild><button type="button" disabled={busy} aria-label="Model" className="flex h-8 max-w-56 items-center gap-1.5 truncate rounded-md px-2 text-xs text-fg-muted hover:bg-surface-3 hover:text-fg"><span className="truncate">{currentName}</span><ChevronDown size={13} className="shrink-0" /></button></DropdownMenuTrigger>
+    <DropdownMenuTrigger asChild><button type="button" disabled={busy} aria-label="Model" className="flex h-8 min-w-0 max-w-56 items-center gap-1.5 truncate rounded-md px-2 text-xs text-fg-muted hover:bg-surface-3 hover:text-fg max-[639px]:max-w-[112px]"><span className="truncate">{currentName}</span><ChevronDown size={13} className="shrink-0" /></button></DropdownMenuTrigger>
     <DropdownMenuContent label="Model" align="end" side="top" className="max-h-[min(440px,60vh)] w-72 overflow-y-auto">
       <DropdownMenuRadioGroup value={bot.model ?? ''} onValueChange={(value) => void select(value)}>
         <DropdownMenuLabel>Workspace</DropdownMenuLabel>
@@ -170,21 +170,22 @@ export function Thread(props: Props) {
     props.onShowComputer()
   }
   let lastDay = ''
-  return <section ref={interactionRoot} className="grid min-h-0 h-full grid-rows-[56px_minmax(0,1fr)_auto] bg-surface text-fg">
-    <header className="flex items-center border-b border-line bg-surface px-4">
-      <MembersPopover room={room} bots={bots} users={users} presence={presence} open={props.membersOpen} onOpenChange={props.onMembersOpenChange} onChanged={props.onMembersChanged} onRoomSettings={props.onSettings} trigger={<button type="button" aria-label="Members" onClick={props.onOpenMembers} className="flex min-w-0 items-center rounded-md pr-2 text-left hover:bg-surface-2"><HeaderAvatars room={room} /><span className="ml-2 min-w-0"><h1 className="truncate text-[15px] font-semibold">{roomName}</h1><span className="block truncate text-xs text-fg-muted">{subtitle}</span></span></button>} />
-      <IconButton label="Room settings" onClick={props.onSettings}><MoreHorizontal size={18} /></IconButton>
+  return <section ref={interactionRoot} className="grid h-full min-h-0 min-w-0 grid-rows-[56px_minmax(0,1fr)_auto] overflow-hidden bg-surface text-fg">
+    <header className="flex min-w-0 items-center border-b border-line bg-surface px-4 max-[639px]:px-2">
+      <MembersPopover room={room} bots={bots} users={users} presence={presence} open={props.membersOpen} onOpenChange={props.onMembersOpenChange} onChanged={props.onMembersChanged} onRoomSettings={props.onSettings} trigger={<button type="button" aria-label="Members" onClick={props.onOpenMembers} className="flex min-w-0 items-center rounded-md pr-2 text-left hover:bg-surface-2 max-[639px]:min-h-[44px]"><HeaderAvatars room={room} /><span className="ml-2 min-w-0"><h1 className="truncate text-[15px] font-semibold">{roomName}</h1><span className="block truncate text-xs text-fg-muted">{subtitle}</span></span></button>} />
+      <IconButton label="Room settings" onClick={props.onSettings} className="max-[639px]:hidden"><MoreHorizontal size={18} /></IconButton>
       <div className="min-w-4 flex-1" />
       <div className="flex items-center gap-2">
-        <RoomApps room={room} />
+        <div className="max-[639px]:hidden"><RoomApps room={room} /></div>
+        <div className="hidden max-[639px]:block"><RoomApps room={room} compact /></div>
         <span className="relative">
-          <IconButton label="Computer" kbd="⌘." aria-pressed={props.computerOpen} onClick={props.onToggleComputer}><Monitor size={17} /></IconButton>
+          <IconButton label="Computer" kbd="⌘." aria-pressed={props.computerOpen} onClick={props.onToggleComputer} className="max-[639px]:h-[44px] max-[639px]:w-[44px]"><Monitor size={17} /></IconButton>
           {headerStatus && <span aria-hidden="true" className={`absolute right-0 top-0 h-1.5 w-1.5 rounded-full ${headerStatus === 'working' ? 'bg-working' : 'bg-waiting motion-safe:animate-pulse'}`} />}
         </span>
       </div>
     </header>
-    <div ref={scroller} onScroll={(event) => { const element = event.currentTarget; pinned.current = element.scrollHeight - element.scrollTop - element.clientHeight <= 80 }} className="scrollbar-thin min-h-0 overflow-y-auto">
-      <div className="mx-auto max-w-[760px] px-6 py-6">{messages.map((message, index) => {
+    <div ref={scroller} onScroll={(event) => { const element = event.currentTarget; pinned.current = element.scrollHeight - element.scrollTop - element.clientHeight <= 80 }} className="scrollbar-thin min-h-0 overflow-y-auto overscroll-contain">
+      <div className="mx-auto max-w-[760px] px-6 py-6 max-[639px]:px-3 max-[639px]:py-4">{messages.map((message, index) => {
         const grouped = groupedWithPrevious(messages[index - 1], message)
         const day = new Date(message.createdAt).toDateString()
         const showDay = day !== lastDay
@@ -199,12 +200,12 @@ export function Thread(props: Props) {
         return <div key={message.id}>
           {showDay && <div className="my-5 flex items-center gap-3 text-[11px] font-medium text-fg-subtle"><span className="h-px flex-1 bg-line" />{new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(new Date(message.createdAt))}<span className="h-px flex-1 bg-line" /></div>}
           {approval ? <ApprovalCard approval={approval} onUpdate={props.onApproval} desktopAvailable={Boolean(computerStatus.data?.desktop?.stream)} onTakeOver={takeOver} /> : mine
-            ? <div className={`group relative flex justify-end ${grouped ? 'mb-1' : 'mb-4'}`}><div className="relative max-w-[72%]"><div className="message-markdown rounded-2xl rounded-br-md bg-surface-3 px-4 py-2.5 text-fg"><MessageMarkdown text={message.text} />{files.map((file, fileIndex) => <span key={fileIndex} title={String(file.path)} className="mt-2 flex items-center gap-2 rounded-md border border-line bg-surface-2 px-2 py-1 text-xs"><Paperclip size={12} />{String(file.name)} · {Math.ceil(Number(file.size) / 1024)} KB</span>)}</div><time className="pointer-events-none absolute -bottom-3 right-1 z-10 rounded bg-surface px-1 text-[10px] text-fg-subtle opacity-0 group-hover:opacity-100">{formatTime(message.createdAt)}</time></div></div>
-            : <div className={`group relative flex max-w-[82%] items-start gap-2 ${grouped ? 'mb-1' : 'mb-4'}`}>
+            ? <div className={`group relative flex min-w-0 justify-end ${grouped ? 'mb-1' : 'mb-4'}`}><div className="relative min-w-0 max-w-[72%] max-[639px]:max-w-[88%]"><div className="message-markdown min-w-0 rounded-2xl rounded-br-md bg-surface-3 px-4 py-2.5 text-fg"><MessageMarkdown text={message.text} />{files.map((file, fileIndex) => <span key={fileIndex} title={String(file.path)} className="mt-2 flex min-w-0 items-center gap-2 rounded-md border border-line bg-surface-2 px-2 py-1 text-xs"><Paperclip size={12} className="shrink-0" /><span className="min-w-0 truncate">{String(file.name)} · {Math.ceil(Number(file.size) / 1024)} KB</span></span>)}</div><time className="pointer-events-none absolute -bottom-3 right-1 z-10 rounded bg-surface px-1 text-[10px] text-fg-subtle opacity-0 group-hover:opacity-100">{formatTime(message.createdAt)}</time></div></div>
+            : <div className={`group relative flex min-w-0 max-w-[82%] items-start gap-2 max-[639px]:max-w-[96%] ${grouped ? 'mb-1' : 'mb-4'}`}>
               {grouped || (showCompanion && message.id === latest?.id) ? <div className="w-7 shrink-0" /> : bot ? <BotAvatar {...bot.avatar} size={28} label={bot.name} /> : human ? <HumanAvatar name={human.name} size={28} /> : <div className="w-7 shrink-0" />}
               <div className="relative min-w-0">
                 {!grouped && <span className="mb-1 block text-xs font-semibold text-fg-muted" style={botLabelStyle(bot?.avatar.color)}>{bot?.name ?? human?.name ?? 'System'}</span>}
-                <div className={`message-markdown max-w-[68ch] text-fg ${system ? 'rounded-md border border-line border-l-[var(--color-waiting)] bg-surface-2 px-3 py-2 shadow-card' : ''}`} style={system ? { fontSize: 13 } : undefined}><MessageMarkdown text={message.text} />{files.map((file, fileIndex) => <span key={fileIndex} title={String(file.path)} className="mt-2 flex items-center gap-2 rounded-md border border-line bg-surface-2 px-2 py-1 text-xs"><Paperclip size={12} />{String(file.name)} · {Math.ceil(Number(file.size) / 1024)} KB</span>)}</div>
+                <div className={`message-markdown min-w-0 max-w-[68ch] text-fg ${system ? 'rounded-md border border-line border-l-[var(--color-waiting)] bg-surface-2 px-3 py-2 shadow-card' : ''}`} style={system ? { fontSize: 13 } : undefined}><MessageMarkdown text={message.text} />{files.map((file, fileIndex) => <span key={fileIndex} title={String(file.path)} className="mt-2 flex min-w-0 items-center gap-2 rounded-md border border-line bg-surface-2 px-2 py-1 text-xs"><Paperclip size={12} className="shrink-0" /><span className="min-w-0 truncate">{String(file.name)} · {Math.ceil(Number(file.size) / 1024)} KB</span></span>)}</div>
                 <time className="pointer-events-none absolute -bottom-3 right-1 z-10 rounded bg-surface px-1 text-[10px] text-fg-subtle opacity-0 group-hover:opacity-100">{formatTime(message.createdAt)}</time>
               </div>
             </div>}
@@ -221,18 +222,18 @@ export function Thread(props: Props) {
       })}
       <div id="thread-bottom" /></div>
     </div>
-    <div className="bg-surface px-4 pb-4 pt-2">
+    <div className="bg-surface px-4 pb-4 pt-2 max-[639px]:px-3 max-[639px]:pb-[max(12px,env(safe-area-inset-bottom))]">
       <ConnectAutocomplete text={text} apps={apps.data?.apps ?? []} onSelect={(app) => { setText(''); void connect(app) }} />
       {error && <p role="alert" className="mx-auto mb-2 max-w-[760px] text-xs text-danger">{error}</p>}
-      {attachments.length > 0 && <div className="mx-auto mb-2 flex max-w-[760px] flex-wrap gap-2">{attachments.map((file, index) => <button type="button" key={index} onClick={() => setAttachments((current) => current.filter((_, fileIndex) => fileIndex !== index))} className="rounded-md border border-line bg-surface-2 px-2 py-1 text-xs text-fg-muted">{String(file.name)} ×</button>)}</div>}
+      {attachments.length > 0 && <div className="mx-auto mb-2 flex max-w-[760px] flex-wrap gap-2">{attachments.map((file, index) => <button type="button" key={index} title={`Remove ${String(file.name)}`} onClick={() => setAttachments((current) => current.filter((_, fileIndex) => fileIndex !== index))} className="max-w-full truncate rounded-md border border-line bg-surface-2 px-2 py-1 text-xs text-fg-muted">{String(file.name)} ×</button>)}</div>}
       <div className="mx-auto max-w-[760px] rounded-2xl border border-line bg-surface-2 p-2 shadow-card focus-within:border-line-strong">
-        <textarea ref={textarea} value={text} onChange={(event) => setText(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void submit() } }} rows={1} placeholder={`Message ${roomName}`} className="block max-h-[184px] min-h-9 w-full resize-none overflow-y-auto bg-transparent px-2 py-2 text-[15px] leading-6 text-fg outline-none placeholder:text-fg-subtle" />
+        <textarea ref={textarea} value={text} onChange={(event) => setText(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void submit() } }} rows={1} placeholder={`Message ${roomName}`} className="block max-h-[184px] min-h-9 w-full resize-none overflow-y-auto bg-transparent px-2 py-2 text-[15px] leading-6 text-fg outline-none placeholder:text-fg-subtle max-[639px]:text-[16px]" />
         <div className="mt-1 flex items-center justify-between gap-2">
           <input ref={fileInput} type="file" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void upload(file); event.target.value = '' }} />
-          <IconButton label="Attach file" disabled={uploading || attachments.length >= 10} onClick={() => fileInput.current?.click()}><Plus size={18} /></IconButton>
+          <IconButton label="Attach file" disabled={uploading || attachments.length >= 10} onClick={() => fileInput.current?.click()} className="max-[639px]:h-[44px] max-[639px]:w-[44px]"><Plus size={18} /></IconButton>
           <div className="flex min-w-0 items-center gap-1">
             {dmBot && <ModelPicker bot={dmBot} roomId={room.id} onError={setModelError} />}
-            {newestRunning && !text.trim() ? <button type="button" onClick={() => void stop(newestRunning.id)} aria-label="Stop" className="grid h-8 w-8 place-items-center rounded-full bg-accent text-accent-fg hover:opacity-90"><Square size={13} fill="currentColor" /></button> : <button type="button" disabled={(!text.trim() && !attachments.length) || sending || uploading} onClick={() => void submit()} aria-label="Send" className="grid h-8 w-8 place-items-center rounded-full bg-accent text-accent-fg hover:opacity-90 disabled:bg-surface-4 disabled:text-fg-subtle"><ArrowUp size={16} /></button>}
+            {newestRunning && !text.trim() ? <button type="button" onClick={() => void stop(newestRunning.id)} aria-label="Stop" className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent text-accent-fg hover:opacity-90 max-[639px]:h-[44px] max-[639px]:w-[44px]"><Square size={13} fill="currentColor" /></button> : <button type="button" disabled={(!text.trim() && !attachments.length) || sending || uploading} onClick={() => void submit()} aria-label="Send" className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent text-accent-fg hover:opacity-90 disabled:bg-surface-4 disabled:text-fg-subtle max-[639px]:h-[44px] max-[639px]:w-[44px]"><ArrowUp size={16} /></button>}
           </div>
         </div>
       </div>

@@ -5,6 +5,7 @@ import type { Bot as BotType, User } from '@openstaff/shared'
 import type { RoomView } from '../lib/loaders'
 import { api, formatTime } from '../lib/api'
 import { sortRooms } from '../lib/room-order'
+import { responsivePaneOpen } from '../lib/responsive-pane'
 import { BotAvatar, HumanAvatar } from './BotAvatar'
 import { BrandMark } from './BrandMark'
 import { BotWorkstation } from './BotWorkstation'
@@ -63,14 +64,22 @@ export function AppShell({ rooms, currentRoomId, currentUser, bots, users, home 
   const searchRef = useRef<HTMLInputElement>(null)
   const [search, setSearch] = useState('')
   const [roomListOpen, setRoomListOpen] = useState(false)
+  const [wideNavigation, setWideNavigation] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
   const [groupOpen, setGroupOpen] = useState(false)
   useEffect(() => {
-    if (typeof window !== 'undefined') setRoomListOpen(localStorage.getItem('openstaff.roomList') === 'true')
+    const media = window.matchMedia('(min-width: 900px)')
+    const updateMedia = () => {
+      setWideNavigation(media.matches)
+      setRoomListOpen(responsivePaneOpen({ wide: media.matches, stored: localStorage.getItem('openstaff.roomList'), defaultOpen: false }))
+    }
+    updateMedia()
+    media.addEventListener('change', updateMedia)
+    return () => media.removeEventListener('change', updateMedia)
   }, [])
   const setListOpen = (open: boolean) => {
     setRoomListOpen(open)
-    if (typeof window !== 'undefined') localStorage.setItem('openstaff.roomList', String(open))
+    if (typeof window !== 'undefined' && wideNavigation) localStorage.setItem('openstaff.roomList', String(open))
   }
   useEffect(() => {
     const shortcut = (event: KeyboardEvent) => {
@@ -78,14 +87,14 @@ export function AppShell({ rooms, currentRoomId, currentUser, bots, users, home 
         event.preventDefault()
         setRoomListOpen((current) => {
           const next = !current
-          localStorage.setItem('openstaff.roomList', String(next))
+          if (wideNavigation) localStorage.setItem('openstaff.roomList', String(next))
           return next
         })
       }
     }
     window.addEventListener('keydown', shortcut)
     return () => window.removeEventListener('keydown', shortcut)
-  }, [])
+  }, [wideNavigation])
   const showSearch = () => {
     setListOpen(true)
     requestAnimationFrame(() => searchRef.current?.focus())
@@ -105,37 +114,37 @@ export function AppShell({ rooms, currentRoomId, currentUser, bots, users, home 
     await navigate({ to: '/login' })
   }
 
-  return <main className="relative grid h-screen grid-cols-[64px_auto_minmax(0,1fr)] overflow-hidden bg-app text-fg">
+  return <main className="relative grid h-[100dvh] grid-cols-[64px_auto_minmax(0,1fr)] overflow-hidden bg-app text-fg max-[639px]:grid-cols-[48px_auto_minmax(0,1fr)]">
     <nav aria-label="Rooms" className="contents">
-      <aside className="z-50 flex min-h-0 w-16 flex-col items-center border-r border-line bg-app py-3">
-        <Link to="/" aria-label="OpenStaff" className="mb-4 grid h-8 w-8 place-items-center rounded-md text-fg"><BrandMark /></Link>
+      <aside className="z-50 flex min-h-0 w-16 flex-col items-center border-r border-line bg-app py-3 max-[639px]:w-[48px] max-[639px]:overflow-y-auto max-[639px]:py-2">
+        <Link to="/" aria-label="OpenStaff" className="mb-4 grid h-8 w-8 place-items-center rounded-md text-fg max-[639px]:h-[44px] max-[639px]:w-[44px]"><BrandMark /></Link>
         <div className="flex flex-col gap-1">
           <Tooltip label="Home">
-            <Link to="/" aria-label="Home" aria-current={home ? 'page' : undefined} className={`relative grid h-8 w-8 place-items-center rounded-md text-fg-muted hover:bg-surface-3 hover:text-fg ${home ? 'bg-surface-3 text-fg' : ''}`}>
+            <Link to="/" aria-label="Home" aria-current={home ? 'page' : undefined} className={`relative grid h-8 w-8 place-items-center rounded-md text-fg-muted hover:bg-surface-3 hover:text-fg max-[639px]:h-[44px] max-[639px]:w-[44px] ${home ? 'bg-surface-3 text-fg' : ''}`}>
               {home && <span className="absolute -left-4 h-6 w-[3px] rounded-r-full bg-fg" />}
               <Home size={17} />
             </Link>
           </Tooltip>
-          <IconButton label="Toggle room list" kbd="⌘B" aria-pressed={roomListOpen} onClick={() => setListOpen(!roomListOpen)}><PanelLeft size={17} /></IconButton>
-          <IconButton label="Search rooms" onClick={showSearch}><Search size={17} /></IconButton>
+          <IconButton label="Toggle room list" kbd="⌘B" aria-pressed={roomListOpen} onClick={() => setListOpen(!roomListOpen)} className="max-[639px]:h-[44px] max-[639px]:w-[44px]"><PanelLeft size={17} /></IconButton>
+          <IconButton label="Search rooms" onClick={showSearch} className="max-[639px]:h-[44px] max-[639px]:w-[44px]"><Search size={17} /></IconButton>
           <DropdownMenu open={createOpen} onOpenChange={setCreateOpen}>
-            <DropdownMenuTrigger asChild><span><IconButton label="Create"><Plus size={18} /></IconButton></span></DropdownMenuTrigger>
+            <DropdownMenuTrigger asChild><span><IconButton label="Create" className="max-[639px]:h-[44px] max-[639px]:w-[44px]"><Plus size={18} /></IconButton></span></DropdownMenuTrigger>
             <DropdownMenuContent label="Create" side="right" align="start">
               <Link to="/bots/new" className="flex items-center gap-2 rounded-md px-2.5 py-2 text-sm hover:bg-surface-3"><Bot size={15} />New bot</Link>
               <button type="button" onClick={() => { setCreateOpen(false); setGroupOpen(true) }} className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm hover:bg-surface-3"><Users size={15} />New group</button>
             </DropdownMenuContent>
           </DropdownMenu>
           <Tooltip label="Marketplace">
-            <Link to="/marketplace" aria-label="Marketplace" className="grid h-8 w-8 place-items-center rounded-md text-fg-muted transition-[color,background-color,transform] duration-150 ease-out hover:bg-surface-3 hover:text-fg active:scale-[.97]"><ShoppingBag size={17} /></Link>
+            <Link to="/marketplace" aria-label="Marketplace" className="grid h-8 w-8 place-items-center rounded-md text-fg-muted transition-[color,background-color,transform] duration-150 ease-out hover:bg-surface-3 hover:text-fg active:scale-[.97] max-[639px]:h-[44px] max-[639px]:w-[44px]"><ShoppingBag size={17} /></Link>
           </Tooltip>
         </div>
         <div className="my-3 h-px w-8 bg-line" />
-        <div className="scrollbar-thin min-h-0 flex-1 space-y-1 overflow-y-auto px-2" role="list">
+        <div className="scrollbar-thin min-h-0 flex-1 space-y-1 overflow-y-auto px-2 max-[639px]:w-full max-[639px]:px-[2px]" role="list">
           {sorted.map((room) => {
             const name = roomName(room, bots), status = roomStatus(room, bots), active = currentRoomId === room.id
             return <div role="listitem" key={room.id}>
               <Tooltip label={`${name} · ${room.lastMessagePreview || 'Start a conversation'}`}>
-                <Link aria-label={name} aria-current={active ? 'page' : undefined} to="/rooms/$roomId" params={{ roomId: room.id }} className={`relative grid h-10 w-10 place-items-center rounded-md ${active ? 'bg-surface-3' : 'hover:bg-surface-3'}`}>
+                <Link aria-label={name} aria-current={active ? 'page' : undefined} to="/rooms/$roomId" params={{ roomId: room.id }} className={`relative grid h-10 w-10 place-items-center rounded-md max-[639px]:h-[44px] max-[639px]:w-[44px] ${active ? 'bg-surface-3' : 'hover:bg-surface-3'}`}>
                   {active && <span className="absolute -left-2 h-6 w-[3px] rounded-r-full bg-fg" />}
                   <span className="relative"><RoomAvatar room={room} bots={bots} size={34} /><StatusDot status={status} /></span>
                 </Link>
@@ -145,10 +154,10 @@ export function AppShell({ rooms, currentRoomId, currentUser, bots, users, home 
         </div>
         <div className="mt-3 flex flex-col items-center gap-2 border-t border-line pt-3">
           <Tooltip label="Settings">
-            <Link to="/settings" aria-label="Settings" className="grid h-8 w-8 place-items-center rounded-md text-fg-muted hover:bg-surface-3 hover:text-fg"><Settings size={17} /></Link>
+            <Link to="/settings" aria-label="Settings" className="grid h-8 w-8 place-items-center rounded-md text-fg-muted hover:bg-surface-3 hover:text-fg max-[639px]:h-[44px] max-[639px]:w-[44px]"><Settings size={17} /></Link>
           </Tooltip>
           <DropdownMenu>
-            <DropdownMenuTrigger asChild><button type="button" aria-label="Account menu" className="rounded-full active:scale-[.97]"><HumanAvatar name={currentUser.name} size={32} /></button></DropdownMenuTrigger>
+            <DropdownMenuTrigger asChild><button type="button" aria-label="Account menu" className="grid place-items-center rounded-full active:scale-[.97] max-[639px]:h-[44px] max-[639px]:w-[44px]"><HumanAvatar name={currentUser.name} size={32} /></button></DropdownMenuTrigger>
             <DropdownMenuContent label="Account menu" side="right" align="end" className="w-60">
               <div className="px-2.5 py-2">
                 <p className="truncate text-sm font-medium text-fg">{currentUser.name}</p>
@@ -161,9 +170,9 @@ export function AppShell({ rooms, currentRoomId, currentUser, bots, users, home 
         </div>
       </aside>
 
-      {roomListOpen && <button type="button" aria-label="Close room list" onClick={() => setListOpen(false)} className="fixed inset-y-0 left-16 right-0 z-30 hidden bg-overlay max-[899px]:block" />}
-      <aside aria-hidden={!roomListOpen} inert={!roomListOpen ? true : undefined} className={`relative z-40 min-h-0 overflow-hidden border-r border-line bg-app max-[899px]:fixed max-[899px]:inset-y-0 max-[899px]:left-16 ${roomListOpen ? 'w-[272px]' : 'w-0 border-r-0'}`}>
-        <div className="flex h-full w-[272px] flex-col">
+      {roomListOpen && <button type="button" aria-label="Close room list" onClick={() => setListOpen(false)} className="fixed inset-y-0 left-16 right-0 z-30 hidden bg-overlay max-[899px]:block max-[639px]:left-[48px]" />}
+      <aside aria-hidden={!roomListOpen} inert={!roomListOpen ? true : undefined} className={`relative z-40 min-h-0 max-w-[272px] overflow-hidden border-r border-line bg-app max-[899px]:fixed max-[899px]:inset-y-0 max-[899px]:left-16 max-[639px]:left-[48px] ${roomListOpen ? 'w-[272px] max-[639px]:w-[calc(100vw-48px)]' : 'w-0 border-r-0'}`}>
+        <div className="flex h-full w-[272px] max-w-[calc(100vw-48px)] flex-col">
           <div className="border-b border-line px-4 py-3">
             <h2 className="mb-2 text-sm font-semibold">Rooms</h2>
             <label className="flex h-8 items-center gap-2 rounded-md border border-line bg-surface-3 px-2.5 text-fg-muted">

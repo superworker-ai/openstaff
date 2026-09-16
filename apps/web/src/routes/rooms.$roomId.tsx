@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogTitle } from '../components/ui/dialog'
 import { useRoomSocket } from '../hooks/useRoomSocket'
 import { api } from '../lib/api'
 import { loadMe, loadRoomData, type RoomData, type RoomView } from '../lib/loaders'
+import { responsivePaneOpen } from '../lib/responsive-pane'
 
 const SSR_LAYOUT_STORAGE = { getItem: () => null, setItem: () => undefined }
 
@@ -44,41 +45,46 @@ function RoomPage() {
   const key = ['room-data', roomId]
   const query = useQuery({ queryKey: key, queryFn: () => fetchRoomData(roomId), initialData: initial.data })
   const data = query.data
-  const [computerOpen, setComputerOpen] = useState(true)
+  const [computerOpen, setComputerOpen] = useState(search.computer === 1)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [membersOpen, setMembersOpen] = useState(false)
-  const [isDesktop, setIsDesktop] = useState(true)
+  const [isDesktop, setIsDesktop] = useState(false)
   const [dragging, setDragging] = useState(false)
   const [liveEvents, setLiveEvents] = useState<TurnEvent[]>([])
   const [pending, setPending] = useState<Record<string, string>>({})
   const setComputer = useCallback((open: boolean) => {
     setComputerOpen(open)
-    if (typeof window !== 'undefined') localStorage.setItem('openstaff.computerOpen', String(open))
-  }, [])
+    if (typeof window !== 'undefined' && isDesktop) localStorage.setItem('openstaff.computerOpen', String(open))
+  }, [isDesktop])
   useEffect(() => {
-    const stored = localStorage.getItem('openstaff.computerOpen')
-    if (search.computer === 1) setComputerOpen(true)
-    else if (stored !== null) setComputerOpen(stored === 'true')
     const media = window.matchMedia('(min-width: 1024px)')
-    const updateMedia = () => setIsDesktop(media.matches)
+    const updateMedia = () => {
+      setIsDesktop(media.matches)
+      setComputerOpen(responsivePaneOpen({
+        wide: media.matches,
+        stored: localStorage.getItem('openstaff.computerOpen'),
+        defaultOpen: true,
+        requested: search.computer === 1,
+      }))
+    }
     updateMedia()
     media.addEventListener('change', updateMedia)
     return () => media.removeEventListener('change', updateMedia)
-  }, [search.computer])
+  }, [roomId, search.computer])
   useEffect(() => {
     const shortcut = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key === '.') {
         event.preventDefault()
         setComputerOpen((current) => {
           const next = !current
-          localStorage.setItem('openstaff.computerOpen', String(next))
+          if (isDesktop) localStorage.setItem('openstaff.computerOpen', String(next))
           return next
         })
       }
     }
     window.addEventListener('keydown', shortcut)
     return () => window.removeEventListener('keydown', shortcut)
-  }, [])
+  }, [isDesktop])
   useEffect(() => {
     if (!dragging) return
     const stopDragging = () => setDragging(false)
@@ -129,18 +135,16 @@ function RoomPage() {
   const thread = <Thread room={data.room} user={initial.user} bots={data.bots} users={data.users} presence={socket.presence} messages={data.messages} turns={data.turns} approvals={data.approvals} pending={pending} computerOpen={computerOpen} membersOpen={membersOpen} onMembersOpenChange={setMembersOpen} onOpenMembers={() => setMembersOpen(true)} onMembersChanged={() => void query.refetch()} onSent={(message, newTurns) => update((current) => ({ ...current, messages: current.messages.some((item) => item.id === message.id) ? current.messages : [...current.messages, message], turns: [...current.turns, ...newTurns.filter((turn) => !current.turns.some((item) => item.id === turn.id))] }))} onApproval={(approval) => update((current) => ({ ...current, approvals: current.approvals.map((item) => item.id === approval.id ? approval : item) }))} onSettings={() => setSettingsOpen(true)} onToggleComputer={() => setComputer(!computerOpen)} onShowComputer={() => setComputer(true)} />
   return <AppShell rooms={data.rooms} currentRoomId={roomId} currentUser={initial.user} bots={data.bots} users={data.users}>
     <div className="h-full min-h-0 min-w-0">
-      {isDesktop ? <Group id="room-layout" orientation="horizontal" className={`h-full min-h-0 ${dragging ? '[&_iframe]:pointer-events-none' : ''}`} defaultLayout={savedLayout.defaultLayout} onLayoutChanged={savedLayout.onLayoutChanged} resizeTargetMinimumSize={{ coarse: 16, fine: 8 }}>
+      <Group id="room-layout" orientation="horizontal" className={`h-full min-h-0 ${dragging ? '[&_iframe]:pointer-events-none' : ''}`} defaultLayout={savedLayout.defaultLayout} onLayoutChanged={savedLayout.onLayoutChanged} resizeTargetMinimumSize={{ coarse: 16, fine: 8 }}>
         <Panel id="thread" minSize="38%" className="h-full min-h-0">{thread}</Panel>
-        {computerOpen && <><Separator id="room-computer-separator" onPointerDown={() => setDragging(true)} className={`relative z-20 w-px bg-line after:absolute after:-left-[3px] after:inset-y-0 after:w-[7px] hover:bg-line-strong ${dragging ? 'bg-fg' : ''}`} /><Panel id="computer" defaultSize="48%" minSize="30%" maxSize="65%" className="h-full min-h-0">{computerPane}</Panel></>}
-      </Group> : <>
-        <div className="h-full min-h-0">{thread}</div>
-        <Dialog open={computerOpen} onOpenChange={(open) => { if (!open) setComputer(false) }}>
-          <DialogContent label="Computer" className="ui-sheet-content !bottom-0 !left-auto !right-0 !top-0 !h-full !max-h-none !w-[min(100vw,760px)] !max-w-none !translate-x-0 !translate-y-0 !rounded-none !border-y-0 !border-r-0 !bg-surface !p-0">
-            <DialogTitle className="sr-only">Computer</DialogTitle>
-            {computerPane}
-          </DialogContent>
-        </Dialog>
-      </>}
+        {isDesktop && computerOpen && <><Separator id="room-computer-separator" onPointerDown={() => setDragging(true)} className={`relative z-20 w-px bg-line after:absolute after:-left-[3px] after:inset-y-0 after:w-[7px] hover:bg-line-strong ${dragging ? 'bg-fg' : ''}`} /><Panel id="computer" defaultSize="48%" minSize="30%" maxSize="65%" className="h-full min-h-0">{computerPane}</Panel></>}
+      </Group>
+      {!isDesktop && <Dialog open={computerOpen} onOpenChange={(open) => { if (!open) setComputer(false) }}>
+        <DialogContent label="Computer" className="ui-sheet-content !bottom-0 !left-auto !right-0 !top-0 !h-[100dvh] !max-h-none !w-[min(100vw,760px)] !max-w-none !translate-x-0 !translate-y-0 !rounded-none !border-y-0 !border-r-0 !bg-surface !p-0">
+          <DialogTitle className="sr-only">Computer</DialogTitle>
+          {computerPane}
+        </DialogContent>
+      </Dialog>}
     </div>
     {settingsOpen && <RoomSettings room={data.room} onClose={() => setSettingsOpen(false)} onChanged={() => query.refetch()} />}
   </AppShell>

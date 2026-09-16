@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Plug } from 'lucide-react'
 import { appSlug, type ConnectedApp } from '@openstaff/shared'
 import type { RoomView } from '../lib/loaders'
 import { connectRoomApp } from '../lib/connection-popup'
@@ -15,7 +16,7 @@ function StatusDot({ app }: { app: ConnectedApp }) {
   return <span data-status={app.status} className={`h-1.5 w-1.5 shrink-0 rounded-full ${app.status === 'connected' ? 'bg-ok' : app.status === 'expired' ? 'bg-waiting' : 'bg-fg-subtle'}`} />
 }
 
-export function RoomApps({ room }: { room: RoomView }) {
+export function RoomApps({ room, compact = false }: { room: RoomView; compact?: boolean }) {
   const query = useConnectedApps(), [error, setError] = useState('')
   const suggestions = room.members.flatMap((member) => member.entity && 'job' in member.entity ? member.entity.suggestedApps ?? [] : []).map(appSlug)
   const apps = query.data?.apps.filter((app) => suggestions.includes(app.slug) || app.source === 'mcp' || app.status !== 'not connected') ?? []
@@ -24,6 +25,17 @@ export function RoomApps({ room }: { room: RoomView }) {
     catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not connect app') }
   }
   const visible = apps.slice(0, 5), remaining = apps.slice(5)
+  if (compact) {
+    if (apps.length === 0) return null
+    const compactStatus = apps.some((app) => app.status === 'connected') ? 'bg-ok' : apps.some((app) => app.status === 'expired') ? 'bg-waiting' : 'bg-fg-subtle'
+    return <Popover>
+      <PopoverTrigger asChild><button type="button" aria-label={`Room apps · ${apps.length}`} className="relative grid h-[44px] w-[44px] place-items-center rounded-md text-fg-muted hover:bg-surface-3 hover:text-fg"><Plug size={17} /><span className={`absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full ${compactStatus}`} /></button></PopoverTrigger>
+      <PopoverContent label="Room apps" align="end" className="max-h-[min(70dvh,420px)] w-[min(280px,calc(100vw-1rem))] overflow-y-auto p-2">
+        <div className="space-y-1">{apps.map((app) => <button type="button" key={app.slug} disabled={app.status === 'connected'} title={`${app.appName} · ${app.status}`} aria-label={`${app.appName} · ${app.status}`} onClick={() => void connect(app.slug)} className="flex min-h-[44px] w-full items-center gap-2 rounded-md border border-line bg-surface-3 px-2.5 py-2 text-left text-xs text-fg-muted hover:bg-surface-4 hover:text-fg"><AppLogo app={app} /><span className="min-w-0 flex-1 truncate">{app.appName}</span><span className="shrink-0">{app.status}</span><StatusDot app={app} /></button>)}</div>
+        {error && <p role="alert" className="mt-2 text-xs text-danger">{error}</p>}
+      </PopoverContent>
+    </Popover>
+  }
   return <section aria-label="Room apps" className="relative flex items-center gap-2">
     {apps.length > 0 && <div className="flex h-8 items-center gap-1 rounded-lg border border-line bg-surface-2 px-1.5 shadow-card">
       {visible.map((app) => <button type="button" key={app.slug} disabled={app.status === 'connected'} title={`${app.appName} · ${app.status}`} aria-label={`${app.appName} · ${app.status}`} onClick={() => void connect(app.slug)} className="relative grid h-7 w-7 place-items-center rounded-md hover:bg-surface-3"><AppLogo app={app} /><span className="absolute bottom-0.5 right-0.5"><StatusDot app={app} /></span></button>)}
