@@ -6,7 +6,7 @@ import type { Secrets } from '../secrets.js'
 import { ComputerCredentials } from './credentials.js'
 import { computerProvider, computerProviders } from './registry.js'
 import { ComputerError, type ComputerInstanceRecord } from './provider.js'
-import type { Computer, DesktopEndpoints, ExecOptions, FileStat, ManagedComputer } from './types.js'
+import type { Computer, DesktopEndpoints, ExecOptions, FileStat, ManagedComputer, DesktopWindow } from './types.js'
 import type { ComputerLeaseSource } from './lease.js'
 import type { DurableWorkspace, ReconcileResult, StorageAttachment } from '../storage/durable.js'
 import type { RealtimeHub } from '../realtime/hub.js'
@@ -89,6 +89,7 @@ export class ComputerManager implements Computer {
   async status(): Promise<ComputerStatus> {
     if (!this.statusCache || Date.now() >= this.statusCache.expires) {
       const value = this.resolve().then(async (computer) => ({ ...await computer.status(), lockedByEnv: Boolean(process.env.COMPUTER_DRIVER) }))
+        .catch(async (error: unknown): Promise<ComputerStatus> => ({ provider: await this.driver().catch(() => 'local' as const), status: 'error', lockedByEnv: Boolean(process.env.COMPUTER_DRIVER), error: error instanceof Error ? error.message : String(error) }))
       const cache = { expires: Infinity, value }
       this.statusCache = cache
       void value.then((status) => { if (this.statusCache === cache) { cache.expires = Date.now() + 15_000; this.mayResume = status.status !== 'ready' } }, () => {})
@@ -98,8 +99,8 @@ export class ComputerManager implements Computer {
     return this.lease ? { ...status, lease: await this.lease.current() } : status
   }
   async desktop(): Promise<DesktopEndpoints | null> {
-    const computer = await this.resolve()
-    return computer.desktop?.() ?? null
+    const computer = await this.resolve().catch(() => undefined)
+    return computer?.desktop?.() ?? null
   }
   async captureScreen(options?: { quality?: number }) {
     return this.use((computer) => {
@@ -113,6 +114,12 @@ export class ComputerManager implements Computer {
       return computer.desktopInput(action)
     })
   }
+  // Optional desktop helpers: forwarded when the active computer implements them so the tools use
+  // the provider's own window/cursor APIs (E2B) instead of the Docker xdotool/wmctrl fallbacks.
+  // They return null / false when the active computer has no such API so the tools fall back to xdotool/wmctrl.
+  async desktopCursor(): Promise<{ x: number; y: number } | null> { return this.use(async (computer) => (await computer.desktopCursor?.()) ?? null) }
+  async desktopWindows(): Promise<DesktopWindow[] | null> { return this.use(async (computer) => (await computer.desktopWindows?.()) ?? null) }
+  async focusDesktopWindow(input: { id?: string; titleContains?: string }): Promise<boolean> { return this.use(async (computer) => { if (!computer.focusDesktopWindow) return false; await computer.focusDesktopWindow(input); return true }) }
   async restart() { this.statusCache = undefined; try { await this.use((computer) => computer.restart()) } finally { this.statusCache = undefined } }
   async stop() {
     this.cancelIdle(); this.statusCache = undefined

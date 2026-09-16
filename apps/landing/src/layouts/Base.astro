@@ -1,0 +1,90 @@
+---
+import Nav from '../components/Nav.astro'
+import Footer from '../components/Footer.astro'
+import '../styles/global.css'
+
+interface Props {
+  title: string
+  description: string
+}
+
+const { title, description } = Astro.props
+const canonical = new URL(Astro.url.pathname, Astro.site).toString()
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="theme-color" content="#ffffff" />
+    <script is:inline>
+      // Resolve before paint so a saved night theme never flashes the day view.
+      let preference = 'system'
+      try {
+        const saved = localStorage.getItem('openstaff.theme')
+        if (saved === 'light' || saved === 'dark') preference = saved
+      } catch { /* Device preference still works when storage is blocked. */ }
+      const theme = preference === 'system'
+        ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+        : preference
+      document.documentElement.dataset.themePreference = preference
+      document.documentElement.dataset.theme = theme
+      document.documentElement.style.colorScheme = theme
+      document.querySelector('meta[name="theme-color"]').content = theme === 'dark' ? '#141416' : '#ffffff'
+
+      if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        const root = document.documentElement
+        root.classList.add('motion-ok')
+        const reveal = () => {
+          if (!root.hasAttribute('data-motion-ready')) root.classList.remove('motion-ok')
+        }
+        addEventListener('load', reveal, { once: true })
+        setTimeout(reveal, 3000)
+      }
+    </script>
+    <noscript><style is:inline>html .site-header.over-hero { position: absolute; width: 100%; }</style></noscript>
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="OpenStaff" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={new URL('/og.png', Astro.site).toString()} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <link rel="icon" href="/brand/icon-32.png" type="image/png" sizes="32x32" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/brand/apple-touch-icon.png" sizes="180x180" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class:list={['site-header', { 'over-hero': Astro.url.pathname === '/' }]}><Nav /></header>
+    <main id="main"><slot /></main>
+    <footer><Footer /></footer>
+    <script>
+      import '../scripts/theme'
+      import '../scripts/motion'
+    </script>
+  </body>
+</html>
+
+<style>
+  .site-header {
+    position: sticky;
+    z-index: 50;
+    top: 0;
+  }
+  .site-header.over-hero { margin-bottom: -4.0625rem; }
+</style>

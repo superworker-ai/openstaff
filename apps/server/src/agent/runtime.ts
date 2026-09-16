@@ -33,6 +33,9 @@ export { stripInlineFileData } from './screenshot-context.js'
 
 export type RunResult = { kind: 'done'; text: string; usage: Record<string, JsonValue> } | { kind: 'waiting' } | { kind: 'skipped' }
 
+/** One conversation per bot per room; used as the provider session id (OpenCode Go requires one). */
+const conversationId = (turn: Pick<Turn, 'botId' | 'roomId'>): string => `${turn.botId}:${turn.roomId}`
+
 function serializable(value: unknown): JsonValue {
   try { return JSON.parse(JSON.stringify(value)) } catch { return String(value) }
 }
@@ -94,7 +97,7 @@ export class AgentRuntime {
   private readonly modelResolver: ModelResolver
 
   constructor(private readonly options: AgentRuntimeOptions) {
-    this.modelResolver = options.modelResolver ?? resolveModel
+    this.modelResolver = options.modelResolver ?? ((id, resolve) => resolveModel(id, undefined, resolve))
   }
 
   async computerProvider(): Promise<ComputerProviderId | undefined> {
@@ -117,7 +120,7 @@ export class AgentRuntime {
     const timeout = AbortSignal.timeout(6_000)
     const combined = signal ? AbortSignal.any([signal, timeout]) : timeout
     const result = await generateText({
-      model: this.modelResolver(process.env.REPLY_DECISION_MODEL || settings?.replyDecisionModel || turn.model),
+      model: this.modelResolver(process.env.REPLY_DECISION_MODEL || settings?.replyDecisionModel || turn.model, { sessionId: conversationId(turn) }),
       output: Output.object({ schema: z.object({ reply: z.boolean(), reason: z.string() }) }),
       abortSignal: combined,
       prompt: `You are deciding whether ${bot.name}, whose job is "${bot.job}", should reply in this room. Reply only for a unique, material contribution: its lane, a correction, or a blocker. Return reply:false for agreement, acknowledgement, emoji-only replies, restating a teammate, or no useful contribution.\n\nLast 3 bot replies to this same trigger (author labeled):\n${recentReplies}\n\nRoom history:\n${history}`,
@@ -128,7 +131,7 @@ export class AgentRuntime {
   async run(turn: Turn, signal?: AbortSignal): Promise<RunResult> {
     signal?.throwIfAborted()
     // Resolve credentials before launching plugin processes.
-    this.modelResolver(turn.model)
+    this.modelResolver(turn.model, { sessionId: conversationId(turn) })
     const mcp = await openPluginTools(this.options.registry?.enabled() ?? [], signal, this.options.registry?.mcpPool, this.options.registry?.oauth)
     const recorder = new TurnEventRecorder(this.options.db, this.options.hub, turn.id, turn.roomId)
     const browser = this.options.browser?.session(turn.id, recorder, signal)
@@ -167,7 +170,7 @@ export class AgentRuntime {
     await recorder.record('status', { tools: Object.keys(agentTools).length, hiddenApps: [...new Set(hiddenApps)] })
     const delta = new DeltaBroadcaster(hub, turn)
     const agent = new ToolLoopAgent({
-      model: this.modelResolver(turn.model),
+      model: this.modelResolver(turn.model, { sessionId: conversationId(turn) }),
       instructions: `${prompt.instructions}\n\n${await connections.prompt()}`,
       tools: agentTools,
       toolsContext: Object.fromEntries(Object.keys(agentTools).map((name) => [name, context])) as { [K in keyof typeof agentTools]: AgentToolContext },

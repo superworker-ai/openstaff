@@ -11,5 +11,5 @@ export const Route = createFileRoute('/connect/composio')({
 })
 function ConnectComposioPage() {
   const { toolkit, approval } = Route.useSearch(), apps = useConnectedApps()
-  return <main className="flex min-h-screen items-center justify-center bg-zinc-50 p-6"><section className="w-full max-w-md space-y-5 rounded-2xl border border-zinc-200 bg-white p-6"><h1 className="text-xl font-semibold">Connect {appName(toolkit)}</h1><p className="text-sm text-zinc-500">Sign in to continue your conversation.</p>{apps.data && <ComposioConnect toolkit={toolkit} approvalId={approval} configured={apps.data.configured} standalone />}</section></main>
+  return <main className="flex min-h-screen items-center justify-center bg-app p-6 text-fg"><section className="w-full max-w-md space-y-5 rounded-lg border border-line-strong bg-surface-2 p-6 shadow-popover"><h1 className="text-xl font-semibold">Connect {appName(toolkit)}</h1><p className="text-sm text-fg-muted">Sign in to continue your conversation.</p>{apps.data && <ComposioConnect toolkit={toolkit} approvalId={approval} configured={apps.data.configured} standalone />}</section></main>
 }

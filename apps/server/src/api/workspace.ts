@@ -11,7 +11,7 @@ export function workspaceRoutes({ db, keys, registry, composio, computer }: ApiD
   const app = new Hono<AppEnv>()
   app.get('/onboarding', async (c) => {
     const configured = keys.configured()
-    const model = ['xai', 'anthropic', 'openai', 'aiGateway'].some((key) => configured[key as keyof typeof configured])
+    const model = ['xai', 'anthropic', 'openai', 'opencode', 'aiGateway'].some((key) => configured[key as keyof typeof configured])
     const hasBots = Boolean((await db.select({ id: bots.id }).from(bots).limit(1))[0])
     const connected = (await availableApps(registry, composio)).some((item) => item.status === 'connected')
     return c.json({ model, connected, hasBots, complete: model && connected && hasBots })
@@ -19,7 +19,7 @@ export function workspaceRoutes({ db, keys, registry, composio, computer }: ApiD
   app.get('/provider-keys', (c) => c.json({ configured: keys.configured() }))
   app.put('/provider-keys', async (c) => {
     if (c.get('user').role !== 'owner') return c.json({ error: 'Workspace owner required' }, 403)
-    const input = await parseBody(c, z.object({ xai: z.string().optional(), anthropic: z.string().optional(), openai: z.string().optional(), composio: z.string().optional(), aiGateway: z.string().optional() }).strict())
+    const input = await parseBody(c, z.object({ xai: z.string().optional(), anthropic: z.string().optional(), openai: z.string().optional(), opencode: z.string().optional(), composio: z.string().optional(), aiGateway: z.string().optional() }).strict())
     if (isResponse(input)) return input
     await keys.set(input)
     if (input.composio !== undefined) composio.refreshCatalog()

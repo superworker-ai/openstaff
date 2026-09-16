@@ -38,7 +38,7 @@ export class Secrets {
   }
 }
 
-const envNames: Record<Provider, string> = { xai: 'XAI_API_KEY', anthropic: 'ANTHROPIC_API_KEY', openai: 'OPENAI_API_KEY', composio: 'COMPOSIO_API_KEY', aiGateway: 'AI_GATEWAY_API_KEY' }
+const envNames: Record<Provider, string> = { xai: 'XAI_API_KEY', anthropic: 'ANTHROPIC_API_KEY', openai: 'OPENAI_API_KEY', opencode: 'OPENCODE_API_KEY', composio: 'COMPOSIO_API_KEY', aiGateway: 'AI_GATEWAY_API_KEY' }
 export class KeyStore {
   private readonly keys = new Map<Provider, string>()
   constructor(private readonly db: Database, private readonly secrets: Secrets) {}

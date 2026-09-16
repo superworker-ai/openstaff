@@ -1,0 +1,61 @@
+<div class="theme-controls" data-theme-controls role="group" aria-label="Page theme" hidden>
+    <button type="button" data-theme-choice="light" aria-label="Day" aria-pressed="false" title="Day theme: light colors for daytime">
+      <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+        <circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5" />
+      </svg>
+    </button>
+    <button type="button" data-theme-choice="dark" aria-label="Night" aria-pressed="false" title="Night theme: darker colors for evening">
+      <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20.5 14a8.5 8.5 0 0 1-10.5-10.5A8.5 8.5 0 1 0 20.5 14Z" />
+      </svg>
+    </button>
+    <button type="button" data-theme-choice="system" aria-label="Auto" aria-pressed="true" title="Auto theme: follow your device theme">
+      <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="4" width="18" height="13" rx="2" />
+        <path d="M8 21h8m-4-4v4" />
+      </svg>
+    </button>
+  </div>
+
+<style>
+  .theme-controls {
+    display: flex;
+    flex: none;
+    gap: .125rem;
+    padding: .1875rem;
+    border: 1px solid var(--color-line-strong);
+    border-radius: 999px;
+    background: var(--color-app);
+    color: var(--color-fg-muted);
+  }
+  .theme-controls[hidden] { display: none; }
+  button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.25rem;
+    min-width: 2.25rem;
+    padding: .375rem;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: inherit;
+    font: 500 .75rem/1 Inter, sans-serif;
+    cursor: pointer;
+  }
+  button[aria-pressed='true'] {
+    background: var(--theme-active-bg, var(--color-surface));
+    color: var(--theme-active-fg, var(--color-fg));
+    box-shadow: 0 1px 3px rgb(0 0 0 / .12);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    button[aria-pressed='false']:hover { background: var(--color-surface-3); color: var(--color-fg); }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    button { transition: transform 120ms var(--ease-out); }
+    button[data-pointer-active] { transform: scale(.97); }
+  }
+  @media (max-width: 67.999rem) {
+    button { min-width: 2.75rem; min-height: 2.75rem; padding: .5rem; }
+  }
+</style>

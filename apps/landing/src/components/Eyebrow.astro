@@ -1,0 +1,19 @@
+---
+interface Props { index?: number | undefined }
+const { index } = Astro.props
+---
+
+<p class="eyebrow">{index !== undefined && <span class="section-index">{String(index).padStart(2, '0')}</span>}<slot /></p>
+
+<style>
+  .section-index { margin-right: 0.65rem; font-variant-numeric: tabular-nums; }
+  .eyebrow {
+    margin: 0;
+    color: var(--color-fg-subtle);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    line-height: 1.4;
+    text-transform: uppercase;
+  }
+</style>

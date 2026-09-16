@@ -5,11 +5,48 @@ import { expect, it, vi } from 'vitest'
 import { fixture } from '../test/fixture.js'
 import { TurnEventRecorder } from '../agent/events.js'
 import { BrowserService } from './service.js'
-import { browserTools } from './tools.js'
+import { browserTools, browserToolSchemas } from './tools.js'
 import { turnEvents } from '../db/schema.js'
 import { toolApprovalFor } from '../agent/approval-policy.js'
 import type { ComputerLease } from '@openstaff/shared'
 import type { ComputerLeaseGate } from '../computer/lease.js'
+
+it('accepts an optional newTab navigation flag without enabling it by default', () => {
+  const url = 'https://example.com'
+  expect(browserToolSchemas.navigate.parse({ url })).toEqual({ url })
+  expect(browserToolSchemas.navigate.parse({ url, newTab: true })).toEqual({ url, newTab: true })
+})
+
+it('skips a desktop tab that never answers instead of hanging the turn', async () => {
+  const f = await fixture()
+  const fakePage = (id: string, visibility: 'visible' | 'hidden', stuck = false) => ({
+    id, url: () => `https://example.com/${id}`, isClosed: () => false, bringToFront: async () => undefined,
+    evaluate: () => stuck ? new Promise<never>(() => undefined) : Promise.resolve(visibility),
+  })
+  let pages = [fakePage('stuck', 'visible', true), fakePage('responsive', 'hidden')]
+  const created: string[] = []
+  const context = {
+    pages: () => pages, setDefaultTimeout: () => undefined,
+    newCDPSession: async (page: { id: string }) => ({ send: async () => ({ targetInfo: { targetId: `target-${page.id}` } }), detach: async () => undefined }),
+    newPage: async () => { const page = fakePage(`created-${created.length}`, 'visible'); created.push(page.id); pages = [...pages, page]; return page },
+  }
+  const connect = (async () => ({ contexts: () => [context], on: () => undefined })) as unknown as typeof import('playwright').chromium.connectOverCDP
+  const desktop = async () => ({ kind: 'proxied' as const, cdpUrl: 'http://127.0.0.1:9', streamUrl: 'http://desktop.invalid', viewer: { user: 'v', password: 'v' }, controller: { user: 'c', password: 'c' } })
+  const browser = new BrowserService(f.directory, desktop, undefined, connect)
+  try {
+    const first = (await f.admission.post({ roomId: f.roomId, authorKind: 'user', authorId: f.userId, text: 'one' })).turns[0]!
+    const started = Date.now()
+    const page = await browser.session(first.id, new TurnEventRecorder(f.db, undefined, first.id, f.roomId)).getPage() as unknown as { id: string }
+    expect(page.id).toBe('responsive')
+    expect(Date.now() - started).toBeLessThan(5000)
+    expect(created).toEqual([])
+
+    pages = [pages[0]!]
+    const second = (await f.admission.post({ roomId: f.roomId, authorKind: 'user', authorId: f.userId, text: 'two' })).turns[0]!
+    const fresh = await browser.session(second.id, new TurnEventRecorder(f.db, undefined, second.id, f.roomId)).getPage() as unknown as { id: string }
+    expect(fresh.id).toBe('created-0')
+  } finally { await f.close() }
+}, 15_000)
 
 it.skipIf(process.env.SKIP_BROWSER_TESTS === '1')('browses a real page with ARIA refs, typed input, and screenshot events', async () => {
   const f = await fixture(), browser = new BrowserService(f.directory)

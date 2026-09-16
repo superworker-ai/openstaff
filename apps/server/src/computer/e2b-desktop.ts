@@ -114,14 +114,17 @@ export class E2BDesktop {
     }
 
     if (!await this.localReady(CDP_PROXY_PORT)) {
+      // Not /tmp: E2B's file API cannot overwrite an existing user-owned file in the sticky /tmp
+      // (protected_regular), which broke every resume after the first run.
+      await this.sandbox.commands.run('mkdir -p /home/user/.openstaff')
       await Promise.all([
-        this.sandbox.files.write('/tmp/openstaff-cdp-proxy.mjs', E2B_CDP_NODE_PROXY),
-        this.sandbox.files.write('/tmp/openstaff-cdp-proxy.py', E2B_CDP_PYTHON_PROXY),
+        this.sandbox.files.write('/home/user/.openstaff/cdp-proxy.mjs', E2B_CDP_NODE_PROXY),
+        this.sandbox.files.write('/home/user/.openstaff/cdp-proxy.py', E2B_CDP_PYTHON_PROXY),
       ])
       const runtime = (await this.sandbox.commands.run("runtime=$(command -v node || command -v python3 || true); printf '%s' \"$runtime\"")).stdout.trim()
       if (!runtime) throw new Error('E2B desktop has no Node.js or Python runtime for the CDP proxy')
-      await this.sandbox.commands.run("pkill -f '/tmp/[o]penstaff-cdp-proxy' || true")
-      const command = path.basename(runtime).startsWith('node') ? `${shellQuote(runtime)} /tmp/openstaff-cdp-proxy.mjs` : `${shellQuote(runtime)} /tmp/openstaff-cdp-proxy.py`
+      await this.sandbox.commands.run("pkill -f '/home/user/.openstaff/[c]dp-proxy' || true")
+      const command = path.basename(runtime).startsWith('node') ? `${shellQuote(runtime)} /home/user/.openstaff/cdp-proxy.mjs` : `${shellQuote(runtime)} /home/user/.openstaff/cdp-proxy.py`
       await this.background(command, { LISTEN_PORT: String(CDP_PROXY_PORT), TARGET_PORT: String(CHROME_PORT), PUBLIC_HOST: this.sandbox.getHost(CDP_PROXY_PORT) })
       if (!await this.waitUntilLocalReady(CDP_PROXY_PORT)) throw new Error('E2B desktop CDP proxy did not become ready')
     }

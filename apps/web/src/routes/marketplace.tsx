@@ -9,6 +9,7 @@ import { MarketplaceGrid } from '../components/marketplace/Grid'
 import { AppCard, SkillCard } from '../components/marketplace/Cards'
 import { useDebouncedSearch, useMarketplace, useMarketplaceUpdates } from '../hooks/useMarketplace'
 import { useConnectionUpdates } from '../hooks/useConnectedApps'
+import { PageFrame } from '../components/PageFrame'
 
 export const Route = createFileRoute('/marketplace')({ loader: async () => { try { return await loadMe() } catch { throw redirect({ to: '/login' }) } }, component: MarketplacePage })
 
@@ -30,11 +31,10 @@ function MarketplacePage() {
     if (slug) await updates.refreshApp(slug)
     else updates.installedSkill(name)
   })
-  return <main className="min-h-screen bg-[#f5f5f3] px-6 py-8"><div className="mx-auto max-w-5xl">
-    <div className="flex justify-between"><Link to="/" className="text-sm text-zinc-500">← Back to rooms</Link><Link to="/settings" className="text-sm text-zinc-500">Settings</Link></div>
-    <h1 className="mt-8 text-3xl font-semibold">Marketplace</h1><p className="mt-2 text-zinc-500">Connect your apps. Give your teammates new skills.</p>
-    <div role="tablist" aria-label="Marketplace categories" className="mt-7 flex gap-5 border-b border-zinc-200">
-      {(['apps', 'skills'] as const).map((value) => <button role="tab" aria-selected={tab === value} data-testid={`marketplace-tab-${value}`} key={value} onClick={() => setTab(value)} className={`pb-3 text-sm capitalize ${tab === value ? 'border-b-2 border-black font-semibold' : 'text-zinc-500'}`}>{value === 'apps' ? 'Apps' : 'Skills'}</button>)}
+  return <PageFrame backLabel="← Back to rooms" backTo="/" actions={<Link to="/settings" className="rounded-md px-3 py-2 text-sm text-fg-muted hover:bg-surface-3 hover:text-fg">Settings</Link>}>
+    <h1 className="text-3xl font-semibold">Marketplace</h1><p className="mt-2 text-fg-muted">Connect your apps. Give your teammates new skills.</p>
+    <div role="tablist" aria-label="Marketplace categories" className="mt-7 flex gap-5 border-b border-line">
+      {(['apps', 'skills'] as const).map((value) => <button role="tab" aria-selected={tab === value} data-testid={`marketplace-tab-${value}`} key={value} onClick={() => setTab(value)} className={`border-b-2 pb-3 text-sm capitalize ${tab === value ? 'border-fg font-semibold text-fg' : 'border-transparent text-fg-muted'}`}>{value === 'apps' ? 'Apps' : 'Skills'}</button>)}
     </div>
     <input aria-label="Search marketplace" placeholder={`Search ${tab}`} className={`${inputClass} mt-5 max-w-sm`} value={search} onChange={(event) => setSearch(event.target.value)} />
     <ErrorText error={action.error || query.error?.message} />
@@ -42,5 +42,5 @@ function MarketplacePage() {
       {tab === 'apps' ? apps.map((item) => <AppCard key={item.slug} item={item} configured={info?.configured ?? false} onConfigured={updates.configured} disabled={action.busy || user.role !== 'owner'} onPlugin={(name, id) => id ? setConnectPlugin({ id, slug: item.slug }) : void install(name, item.slug)} />) : skills.map((item) => <SkillCard key={item.name} item={item} disabled={action.busy || user.role !== 'owner'} install={() => { void install(item.name) }} />)}
     </MarketplaceGrid>
     {connectPlugin && <ConnectDialog pluginId={connectPlugin.id} onClose={() => { const slug = connectPlugin.slug; setConnectPlugin(undefined); if (slug) void action.run(() => updates.refreshApp(slug)) }} />}
-  </div></main>
+  </PageFrame>
 }

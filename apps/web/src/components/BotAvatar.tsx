@@ -60,5 +60,5 @@ export function BotAvatar({ shape, color, eyes, mouth, accessory, personality, s
 }
 
 export function HumanAvatar({ name, size = 36 }: { name: string; size?: number }) {
-  return <div style={{ width: size, height: size }} className="grid shrink-0 place-items-center rounded-full bg-zinc-200 text-xs font-semibold text-zinc-700">{name.slice(0, 2).toUpperCase()}</div>
+  return <div style={{ width: size, height: size }} className="human-avatar grid shrink-0 place-items-center rounded-full bg-surface-4 text-xs font-semibold text-fg-muted">{name.slice(0, 2).toUpperCase()}</div>
 }

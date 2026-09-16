@@ -30,9 +30,9 @@ export const computerToolSchemas = {
 export interface DesktopToolComputer extends Computer {
   captureScreen(options?: { quality?: number }): Promise<DesktopCapture>
   desktopInput(action: DesktopInputAction): Promise<void>
-  desktopCursor?(): Promise<{ x: number; y: number }>
-  desktopWindows?(): Promise<DesktopWindow[]>
-  focusDesktopWindow?(input: { id?: string; titleContains?: string }): Promise<void>
+  desktopCursor?(): Promise<{ x: number; y: number } | null>
+  desktopWindows?(): Promise<DesktopWindow[] | null>
+  focusDesktopWindow?(input: { id?: string; titleContains?: string }): Promise<boolean | void>
 }
 
 export interface ComputerToolOutput { message?: string; url?: string; mediaType?: 'image/jpeg' | 'image/png'; width?: number; height?: number; cursor?: { x: number; y: number } }
@@ -71,7 +71,8 @@ export class ComputerUseSession {
   }
 
   private async cursor(): Promise<{ x: number; y: number }> {
-    if (this.computer.desktopCursor) return this.computer.desktopCursor()
+    const native = await this.computer.desktopCursor?.()
+    if (native) return native
     const result = await this.computer.exec('DISPLAY=:1 xdotool getmouselocation --shell', { timeoutMs: 5000, signal: this.signal })
     const x = /^X=(\d+)$/m.exec(result.stdout)?.[1], y = /^Y=(\d+)$/m.exec(result.stdout)?.[1]
     return { x: Number(x ?? 0), y: Number(y ?? 0) }
@@ -101,14 +102,14 @@ export class ComputerUseSession {
   }
 
   windows(): Promise<DesktopWindow[]> {
-    return this.gate.run(this.recorder, this.signal, () => this.computer.desktopWindows?.() ?? desktopWindows(this.computer)).then(({ value }) => value)
+    return this.gate.run(this.recorder, this.signal, async () => (await this.computer.desktopWindows?.()) ?? desktopWindows(this.computer)).then(({ value }) => value)
   }
 
   input(action: DesktopInputAction): Promise<void> { return this.computer.desktopInput(action) }
 
   async focus(input: { id?: string; titleContains?: string }): Promise<ComputerToolOutput> {
     return this.action(async () => {
-      if (this.computer.focusDesktopWindow) return this.computer.focusDesktopWindow(input)
+      if (this.computer.focusDesktopWindow && await this.computer.focusDesktopWindow(input) !== false) return
       let id = input.id
       if (id && !/^0x[0-9a-f]+$/i.test(id)) throw new Error('Invalid desktop window id')
       if (!id) {
@@ -127,8 +128,8 @@ export async function computerModelOutput(screen: ScreenRecorder, output: Comput
     ? `screen ${output.width}x${output.height}, cursor at ${output.cursor.x},${output.cursor.y}`
     : undefined
   const text = [line, output.message, output.url ? `screenshot ${output.url}` : undefined].filter(Boolean).join('\n') || 'action done'
-  const value: Array<{ type: 'text'; text: string } | { type: 'file-data'; data: string; mediaType: string }> = [{ type: 'text', text }]
-  if (output.url) value.push({ type: 'file-data', data: (await screen.readUrl(output.url)).toString('base64'), mediaType: output.mediaType ?? 'image/jpeg' })
+  const value: Array<{ type: 'text'; text: string } | { type: 'image-data'; data: string; mediaType: string }> = [{ type: 'text', text }]
+  if (output.url) value.push({ type: 'image-data', data: (await screen.readUrl(output.url)).toString('base64'), mediaType: output.mediaType ?? 'image/jpeg' })
   return { type: 'content' as const, value }
 }
 

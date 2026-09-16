@@ -1,0 +1,35 @@
+---
+import ApprovalSection from '../components/ApprovalSection.astro'
+import AutomationMock from '../components/mocks/AutomationMock.astro'
+import ComputerMock from '../components/mocks/ComputerMock.astro'
+import RoomMock from '../components/mocks/RoomMock.astro'
+import Faq from '../components/Faq.astro'
+import Feature from '../components/Feature.astro'
+import FinalCta from '../components/FinalCta.astro'
+import Hero from '../components/Hero.astro'
+import Horizon from '../components/Horizon.astro'
+import ModelsSection from '../components/ModelsSection.astro'
+import SelfHost from '../components/SelfHost.astro'
+import WorksWith from '../components/WorksWith.astro'
+import { features } from '../content/landing'
+import Base from '../layouts/Base.astro'
+
+const title = 'OpenStaff · Your always-on staff of AI teammates'
+const description = 'Open-source AI teammates with shared rooms, persistent computers, approvals, automations, and 600+ integrations.'
+---
+
+<Base {title} {description}>
+  <Horizon />
+  <Hero />
+  <WorksWith />
+  <section id="product" aria-label="Product features">
+    <Feature {...features[0]}><RoomMock /></Feature>
+    <Feature {...features[1]} id="computer" reverse><ComputerMock /></Feature>
+    <Feature {...features[2]}><AutomationMock /></Feature>
+  </section>
+  <ApprovalSection />
+  <ModelsSection />
+  <SelfHost />
+  <Faq />
+  <FinalCta />
+</Base>

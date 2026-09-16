@@ -1,0 +1,62 @@
+---
+import { bots } from '../../content/landing'
+const [ops] = bots
+const username = ops.name.toLowerCase()
+---
+
+<div class="mock-shell" data-mock="dark" role="img" aria-label={`${ops.name}'s persistent computer with a terminal and files`}>
+  <div class="inner" aria-hidden="true">
+    <div class="wallpaper"></div>
+    <div class="terminal-card">
+      <div class="card-bar"><span>{username} — terminal</span><b>● ● ●</b></div>
+      <div class="terminal-body">
+        <p><i>{username}:~/launch $</i> python triage.py --since 7d</p>
+        <p class="output"><em>✓</em> Reviewed recent support conversations</p>
+        <p class="output"><em>✓</em> Wrote recap to launch-plan.md</p>
+        <p><i>{username}:~/launch $</i> <span class="cursor"></span></p>
+      </div>
+    </div>
+    <div class="files-card">
+      <div class="files-title"><span>Files</span><b>launch</b></div>
+      <div class="file"><i>MD</i><span>launch-plan.md</span><em>18 KB</em></div>
+      <div class="file"><i>CSV</i><span>tickets.csv</span><em>64 KB</em></div>
+      <div class="file"><i>PDF</i><span>recap.pdf</span><em>1.2 MB</em></div>
+    </div>
+    <div class="control"><i></i> {ops.name} in control <span>Take over</span></div>
+  </div>
+</div>
+
+<style>
+  .mock-shell { overflow: hidden; border: 1px solid var(--color-line-strong); border-radius: var(--radius-xl); background: var(--color-app); color: var(--color-fg); box-shadow: 0 24px 60px rgb(42 28 0 / 0.12); }
+  .inner { position: relative; min-height: 29rem; overflow: hidden; padding: 3rem 2rem; background-color: var(--color-app);
+    background-image: linear-gradient(rgb(13 13 15 / .25), rgb(13 13 15 / .55)), radial-gradient(circle at 55% 35%, rgb(29 42 68 / .25), rgb(13 13 15 / .1)), image-set(url('/wallpaper/computer-wallpaper-dark.webp') 1x);
+    background-position: center;
+    background-size: cover; }
+  .terminal-card,
+  .files-card { position: relative; z-index: 1; overflow: hidden; border: 1px solid var(--color-line-strong); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: 0 22px 50px rgb(0 0 0 / 0.32); }
+  .terminal-card { width: 86%; }
+  .card-bar { display: flex; height: 2.5rem; align-items: center; justify-content: space-between; padding-inline: 1rem; border-bottom: 1px solid var(--color-line); background: var(--color-surface-3); color: var(--color-fg-muted); font-size: 0.6875rem; }
+  .card-bar b { color: var(--color-fg-subtle); font-size: 0.45rem; letter-spacing: 0.12em; }
+  .terminal-body { min-height: 12rem; padding: 1.25rem; font: 0.75rem/1.75 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .terminal-body p { margin: 0; }
+  .terminal-body i { color: #79a7ff; font-style: normal; }
+  .terminal-body .output { color: var(--color-fg-muted); }
+  .terminal-body em { color: var(--color-ok); font-style: normal; }
+  .cursor { display: inline-block; width: 0.45rem; height: 0.9rem; vertical-align: -0.1rem; background: var(--color-fg-muted); }
+  .files-card { width: 65%; margin: -1.5rem 0 0 auto; }
+  .files-title { display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 1rem; border-bottom: 1px solid var(--color-line); font-size: 0.6875rem; }
+  .files-title b { color: var(--color-fg-muted); font-weight: 400; }
+  .file { display: grid; align-items: center; gap: 0.625rem; grid-template-columns: 1.75rem 1fr auto; padding: 0.625rem 1rem; border-bottom: 1px solid var(--color-line); font-size: 0.6875rem; }
+  .file:last-child { border-bottom: 0; }
+  .file i { display: grid; width: 1.75rem; height: 1.5rem; place-items: center; border-radius: 0.3rem; background: var(--color-surface-3); color: var(--color-fg-muted); font-size: 0.5rem; font-style: normal; font-weight: 600; }
+  .file em { color: var(--color-fg-muted); font-size: 0.625rem; font-style: normal; }
+  .control { position: absolute; z-index: 2; bottom: 1rem; left: 1rem; padding: 0.45rem 0.55rem 0.45rem 0.75rem; border: 1px solid var(--color-glass-line); border-radius: 999px; background: var(--color-glass); color: var(--color-fg-muted); font-size: 0.625rem; backdrop-filter: blur(12px); }
+  .control i { display: inline-block; width: 0.4rem; height: 0.4rem; margin-right: 0.25rem; border-radius: 50%; background: var(--color-ok); }
+  .control span { margin-left: 0.5rem; padding: 0.3rem 0.5rem; border-radius: 999px; background: var(--color-surface-3); color: var(--color-fg); }
+  @media (max-width: 35rem) { .inner { min-height: 23rem; padding: 2rem 1rem; } .terminal-card { width: 94%; } .files-card { width: 75%; } .terminal-body { min-height: 10rem; padding: 1rem; font-size: 0.625rem; } }
+  @media (max-width: 47.999rem) {
+    .inner {
+      background-image: linear-gradient(rgb(13 13 15 / .25), rgb(13 13 15 / .55)), radial-gradient(circle at 55% 35%, rgb(29 42 68 / .25), rgb(13 13 15 / .1)), image-set(url('/wallpaper/computer-wallpaper-dark-sm.webp') 1x, url('/wallpaper/computer-wallpaper-dark.webp') 2x);
+    }
+  }
+</style>

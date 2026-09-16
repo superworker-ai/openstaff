@@ -43,6 +43,7 @@ import { sql } from 'drizzle-orm'
 import { ComputerLeaseService } from './computer/lease.js'
 import { createWorkspaceStore, type WorkspaceStore } from './storage/index.js'
 import { DurableWorkspace } from './storage/durable.js'
+import { homeRoutes } from './api/home.js'
 
 export interface CreateApplicationOptions {
   composioClient?: ComposioClient
@@ -69,7 +70,9 @@ export async function createApplication(options: CreateApplicationOptions = {}):
   const computer = new ComputerManager(`${config.dataDir}/workspace`, database.db, secrets, durable)
   const hub = new RealtimeHub(database.db, () => computer.desktop(), config.publicAppUrl)
   computer.setHub(hub)
-  await computer.initialize()
+  // A broken or unreachable Computer provider must never take the app down: login, settings and
+  // provider switching still work, and the status endpoint reports the error.
+  try { await computer.initialize() } catch (error) { console.error(`Computer provider failed to open: ${error instanceof Error ? error.message : String(error)}`) }
   const lease = new ComputerLeaseService(database.db, hub)
   computer.setLease(lease)
   hub.setLease(lease)
@@ -81,13 +84,13 @@ export async function createApplication(options: CreateApplicationOptions = {}):
   const installer = new PluginInstaller(database.db, config.dataDir, secrets, registry)
   const composio = new ComposioService(database.db, admission, keys, config.dataDir, options.composioClient)
   const automationService = new AutomationService(database.db, admission, options.automationClock, hub)
-  const modelResolver = options.modelResolver ?? ((id: string) => resolveModel(id, keys))
+  const modelResolver: ModelResolver = options.modelResolver ?? ((id, resolve) => resolveModel(id, keys, resolve))
   const compactor = new RoomCompactor(database.db, modelResolver, config.contextMessages)
   const browser = new BrowserService(config.dataDir, () => computer.desktop(), undefined, undefined, { lease })
   const runtime = new AgentRuntime({ browser, db: database.db, computer, durable, admission, hub, registry, composio, automationService, contextMessages: config.contextMessages, modelResolver })
   const scheduler = new TurnScheduler(database.db, runtime, admission, hub, config.maxConcurrentTurns, compactor)
   admission.setTurnEnqueuer((newTurns) => scheduler.enqueue(newTurns))
-  const dependencies: ApiDependencies = { db: database.db, config, computer, durable, lease, admission, scheduler, hub, secrets, keys, registry, installer, composio, automationService }
+  const dependencies: ApiDependencies = { db: database.db, config, computer, durable, lease, admission, scheduler, hub, secrets, keys, registry, installer, composio, automationService, modelResolver }
   const connectionHealth = new ConnectionHealth(registry.oauth, hub)
   const app = new Hono<AppEnv>()
 
@@ -119,6 +122,7 @@ export async function createApplication(options: CreateApplicationOptions = {}):
   app.route('/api/marketplace', marketplaceRoutes(dependencies))
   app.route('/api/connections', connectionRoutes(dependencies))
   app.route('/api/automations', automationRoutes(dependencies))
+  app.route('/api/home', homeRoutes(dependencies))
   app.route('/api/computer', computerRoutes(dependencies))
   app.route('/api/computer/desktop', computerDesktopRoutes(dependencies))
   app.get('/api/users', async (context) => context.json({ users: await database.db.select({ id: users.id, name: users.name, email: users.email, avatar: users.avatar, role: users.role, createdAt: users.createdAt }).from(users).orderBy(users.name) }))

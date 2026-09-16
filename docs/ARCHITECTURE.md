@@ -13,7 +13,7 @@ This document is the design of record. Implementation phases are in `docs/PLAN.m
 | --- | --- |
 | Bot: persistent named teammate with a job, memory, preferences | `bots` row + `bots/<slug>/` directory on the shared computer (MEMORY.md, skills, files) |
 | Shared cloud computer (browser, filesystem, terminal), one per account | One `Computer` per workspace. Drivers: `local` (dev), `docker` (default). Browser via Playwright with a persistent context per workspace |
-| "Each Bot gets its own screen" | Each running turn owns a browser page; screenshots stream to the **Computer** panel |
+| "Each Bot gets its own screen" | Turns reuse the visible desktop tab; `newTab` opens another, and tabs persist across turns; screenshots stream to the **Computer** panel |
 | Plugins: Cursor plugin format (skills, rules, agents, MCP servers, hooks) + Composio for 1000+ apps | `plugins` loader for `.cursor-plugin/plugin.json`, MCP client for `mcp.json`, Composio meta-tools |
 | Group chats (2–6 bots), bot-to-bot messages, task handoff | `rooms` (kind `dm` or `group`), `@mention` addressing, `handoff` tool, `tasks` table |
 | Approvals for consequential actions | AI SDK `toolApproval` → `approvals` table → approval card in chat → resume turn |
@@ -95,7 +95,7 @@ their historical `rtn_` identifiers.
   `SECRETS_KEY`), installed_at
 - `connections` — id, provider (`composio`), toolkit slug, composio_connected_account_id,
   status, created_at. Shared by all bots (Grok Bot: "plugins are shared across agents").
-- `provider_keys` — provider (`xai` | `anthropic` | `openai` | `composio` | `aiGateway`),
+- `provider_keys` — provider (`xai` | `anthropic` | `openai` | `opencode` | `composio` | `aiGateway`),
   encrypted key. Database keys take precedence over environment values; clearing a
   saved key restores the environment fallback. The API only returns configured flags.
 - `room_summaries` — room_id, up_to_seq, summary (compaction output)
@@ -161,9 +161,16 @@ goes. We skip the turn when it's not our lane.") and from the Rooms policy in th
 
 One turn = one `ToolLoopAgent.stream()` call (AI SDK v7; always verify APIs against
 `node_modules/ai/docs`). Model resolved from the bot, else workspace default, else
-`xai/grok-4.6`. Providers: `@ai-sdk/xai`, `@ai-sdk/anthropic`, `@ai-sdk/openai`, plus
-Vercel AI Gateway when `AI_GATEWAY_API_KEY` is set (gateway-style `provider/model` ids
-everywhere).
+`xai/grok-4.6`. Providers: `@ai-sdk/xai`, `@ai-sdk/anthropic`, `@ai-sdk/openai`, and
+`@ai-sdk/openai-compatible`, plus Vercel AI Gateway when `AI_GATEWAY_API_KEY` is set
+(gateway-style `provider/model` ids everywhere). OpenCode Zen (`opencode/*`) and Go
+(`opencode-go/*`) share `OPENCODE_API_KEY` and bypass AI Gateway. Their model prefix selects
+the Anthropic, OpenAI, or OpenAI-compatible SDK and their respective direct endpoint.
+Reasoning effort is not configurable for OpenCode models, and Go quotas are per OpenCode account.
+Go refuses anonymous traffic, so every OpenCode request carries `x-opencode-session` (the
+`botId:roomId` conversation, or `compaction:<roomId>`) and an `openstaff/<version>` user agent.
+Go serves DeepSeek models from China only after an explicit opt-in in the OpenCode workspace
+settings; without it the request fails with a provider error naming the opt-in page.
 
 System prompt (in order):
 1. Identity: name, job, instructions, roster of the room (who is here, their jobs).
@@ -186,7 +193,7 @@ Tools (every tool carries `toolsContext` with turn/bot/room ids and executes ser
 | --- | --- |
 | `shell` | run command on the Computer, cwd `/workspace`, 120 s timeout, output capped 16 KB |
 | `read_file`, `write_file`, `list_dir`, `edit_file` | path-jailed to `/workspace` |
-| `browser_navigate`, `browser_snapshot` (accessibility tree), `browser_click`, `browser_type`, `browser_screenshot` | Playwright, persistent context per workspace; each turn gets its own page |
+| `browser_navigate`, `browser_snapshot` (accessibility tree), `browser_click`, `browser_type`, `browser_screenshot` | Playwright, persistent context per workspace; turns reuse the visible desktop tab, `newTab` opens another, and tabs persist across turns |
 | `computer_screenshot`, `computer_click`, `computer_double_click`, `computer_right_click`, `computer_move`, `computer_drag`, `computer_type`, `computer_key`, `computer_scroll`, `computer_wait` | Native 1280×800 Docker desktop vision/input; image results retain 1:1 pixel coordinates |
 | `computer_windows`, `computer_focus_window` | List and activate Docker desktop windows with wmctrl |
 | `read_skill`, `save_skill` | skills live at `/workspace/skills/<name>/SKILL.md` |
@@ -252,8 +259,9 @@ The Docker provider runs one disposable Ubuntu desktop container with KasmVNC `:
 tint2, and one long-lived headed Chromium as non-root `worker`. KasmVNC and CDP listen only on
 the private Compose network. The authenticated same-origin `/api/computer/desktop/*` HTTP and
 WebSocket proxy injects the read-only viewer identity, and the Computer panel embeds its client.
-The server drives that same Chromium over CDP, opens one tab per turn, re-adopts tabs by target
-id after a disconnect, and serializes visible actions through a per-workspace display mutex.
+The server drives that same Chromium over CDP: turns reuse the visible desktop tab, `newTab` opens
+another, and tabs persist across turns. It re-adopts tabs by target id after a disconnect and
+serializes visible actions through a per-workspace display mutex.
 
 A singleton control lease arbitrates browser input between bots and workspace members. Human
 takeover increments a fenced epoch, grants the requesting member KasmVNC's controller identity,

@@ -73,7 +73,10 @@ describe.skipIf(process.env.SKIP_BROWSER_TESTS === '1')('connection flows in the
     const response = await h.context.request.post(`${h.url}/api/bots`, { data: { templateId: 'growth', name: 'Mail teammate', job: 'Email assistant', avatar: { shape: 'circle', color: '#2E90FA' }, approvalPolicy: 'auto' } })
     const { room } = await response.json() as { room: { id: string } }
     await h.page.goto(`${h.url}/rooms/${room.id}`, { waitUntil: 'domcontentloaded' })
+    await h.page.locator('body[data-hydrated="true"]').waitFor()
+    await h.page.getByRole('button', { name: 'Members' }).click()
     await h.page.getByText('present', { exact: true }).waitFor()
+    await h.page.keyboard.press('Escape')
     await h.page.locator('.message-markdown').getByText('I work best with', { exact: false }).waitFor()
     await h.page.getByRole('button', { name: 'Gmail · not connected', exact: true }).first().waitFor()
     expect(model.doStreamCalls).toHaveLength(0)
@@ -160,7 +163,10 @@ describe.skipIf(process.env.SKIP_BROWSER_TESTS === '1')('connection flows in the
       await h.context.request.post(`${h.url}/api/rooms/${room.id}/connect`, { data: { app: 'HubSpot' } })
       const calls = model.doStreamCalls.length
       await h.page.goto(`${h.url}/rooms/${room.id}`, { waitUntil: 'domcontentloaded' })
+      await h.page.locator('body[data-hydrated="true"]').waitFor()
+      await h.page.getByRole('button', { name: 'Members' }).click()
       await h.page.getByText('present', { exact: true }).waitFor()
+      await h.page.keyboard.press('Escape')
       const card = h.page.getByTestId('connect-card')
       await card.getByRole('button', { name: 'Connect with Composio' }).click()
       await card.getByRole('link', { name: 'Get a Composio key' }).waitFor()

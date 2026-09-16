@@ -1,0 +1,47 @@
+---
+import BotFace from '../BotFace.astro'
+import { bots } from '../../content/landing'
+const [ops, support] = bots
+---
+
+<div class="mock-shell" data-mock="dark" role="img" aria-label={`A room conversation shared by you, ${ops.name}, and ${support.name}`}>
+  <div class="inner" aria-hidden="true">
+    <div class="room-bar"><div><strong>#launch</strong><span>{ops.name}, {support.name}, and you</span></div><b>•••</b></div>
+    <div class="thread">
+      <div class="bubble human">{ops.name}, can you update the launch plan and ask {support.name} for the top support risks?</div>
+      <div class="meta right">You · 9:40</div>
+      <div class="bot-row"><div class="avatar" title={ops.fullName}><BotFace {...ops.avatar} /></div><div><span>{ops.name} · {ops.role}</span><div class="bubble bot">Plan updated. {support.name}, I’ve shared the open questions with you.</div></div></div>
+      <div class="bot-row"><div class="avatar" title={support.fullName}><BotFace {...support.avatar} /></div><div><span>{support.name} · {support.role}</span><div class="bubble bot second">Added this week’s recurring support patterns.</div></div></div>
+      <div class="delivered">Delivered 9:42</div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .mock-shell {
+    overflow: hidden;
+    border: 1px solid var(--color-line-strong);
+    border-radius: var(--radius-xl);
+    background: var(--color-app);
+    color: var(--color-fg);
+    box-shadow: 0 24px 60px rgb(42 28 0 / 0.12);
+  }
+  .room-bar { display: flex; min-height: 4rem; align-items: center; justify-content: space-between; padding: 0.75rem 1.25rem; border-bottom: 1px solid var(--color-line); background: var(--color-surface); }
+  .room-bar strong,
+  .room-bar span { display: block; }
+  .room-bar strong { font-size: 0.8125rem; }
+  .room-bar span,
+  .room-bar b { color: var(--color-fg-muted); font-size: 0.6875rem; }
+  .thread { display: flex; min-height: 25rem; flex-direction: column; padding: 2rem; background: var(--color-surface); }
+  .bubble { width: fit-content; max-width: 75%; padding: 0.75rem 0.875rem; border-radius: 1rem; font-size: 0.8125rem; line-height: 1.45; }
+  .human { align-self: flex-end; border-bottom-right-radius: 0.3rem; background: var(--color-accent); color: white; }
+  .meta { margin-top: 0.3rem; color: var(--color-fg-muted); font-size: 0.625rem; }
+  .right { align-self: flex-end; }
+  .bot-row { display: grid; max-width: 90%; align-items: end; gap: 0.625rem; grid-template-columns: 2rem 1fr; margin-top: 1.4rem; }
+  .avatar { display: grid; width: 2rem; height: 2rem; place-items: center; border-radius: 50%; color: white; font-size: 0.625rem; font-weight: 700; }
+  .bot-row span { display: block; margin: 0 0 0.3rem 0.25rem; color: var(--color-fg-muted); font-size: 0.625rem; }
+  .bot { max-width: 100%; border-bottom-left-radius: 0.3rem; background: var(--color-surface-3); color: var(--color-fg); }
+  .second { background: var(--color-surface-2); }
+  .delivered { margin-top: auto; padding-top: 1.5rem; color: var(--color-fg-subtle); font-size: 0.625rem; text-align: center; }
+  @media (max-width: 35rem) { .thread { min-height: 20rem; padding: 1.25rem; } .bubble { max-width: 85%; } }
+</style>

@@ -9,7 +9,7 @@ import { resolveDatabasePath } from './db/paths.js'
 import { createWorkspaceStore, workspaceStoreInfo } from './storage/index.js'
 
 type Result = { name: string; ok: boolean; hard: boolean; detail: string }
-const modelEnvironment = ['XAI_API_KEY', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'AI_GATEWAY_API_KEY']
+const modelEnvironment = ['XAI_API_KEY', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'OPENCODE_API_KEY', 'AI_GATEWAY_API_KEY']
 const credentials: Record<ComputerProviderId, string[]> = { local: [], docker: [], e2b: ['E2B_API_KEY'], daytona: ['DAYTONA_API_KEY'], freestyle: ['FREESTYLE_API_KEY'], vercel: ['VERCEL_TOKEN', 'VERCEL_TEAM_ID', 'VERCEL_PROJECT_ID'] }
 function selected(value: string | undefined): ComputerProviderId { return COMPUTER_PROVIDERS.includes(value as ComputerProviderId) ? value as ComputerProviderId : 'local' }
 

@@ -1,0 +1,51 @@
+---
+import { worksWith } from '../content/landing'
+import Container from './Container.astro'
+
+
+---
+
+<section class="works" aria-labelledby="works-title">
+  <Container>
+    <p id="works-title">{worksWith.title}</p>
+    <div class="chips" aria-label="Supported integrations">
+      {worksWith.tools.map((tool) => <span>{tool}</span>)}
+    </div>
+  </Container>
+</section>
+
+<style>
+  .works {
+    padding-block: 3rem 5rem;
+    background: var(--color-surface);
+  }
+
+  p {
+    margin: 0;
+    color: var(--color-fg-muted);
+    font-size: 0.875rem;
+    text-align: center;
+  }
+
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 1.25rem;
+  }
+
+  span {
+    padding: 0.4375rem 0.75rem;
+    border-radius: 999px;
+    background: var(--color-surface-3);
+    color: var(--color-fg-muted);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    line-height: 1.2;
+  }
+
+  @media (min-width: 64rem) {
+    .works { padding-bottom: 6rem; }
+  }
+</style>

@@ -1,0 +1,55 @@
+---
+interface Props {
+  shape: 'circle' | 'triangle' | 'drop' | 'hex' | 'blob'
+  color: string
+  eyes?: 'round' | 'happy' | 'sleepy' | 'wink' | 'dot'
+  mouth?: 'smile' | 'grin' | 'flat' | 'open' | 'none'
+  accessory?: 'none' | 'glasses' | 'headphones' | 'antenna' | 'bow' | 'hat'
+  size?: number
+  label?: string
+}
+const { shape, color, eyes = 'dot', mouth = 'smile', accessory = 'none', size = 36, label } = Astro.props
+const anchors = {
+  circle: { cx: 24, cy: 24, scale: 1, top: 4 },
+  triangle: { cx: 24, cy: 31, scale: .8, top: 4 },
+  drop: { cx: 24, cy: 31, scale: .85, top: 3 },
+  hex: { cx: 24, cy: 24, scale: 1, top: 3 },
+  blob: { cx: 24, cy: 24, scale: 1, top: 3 },
+}
+const anchor = anchors[shape]
+const faceTransform = `translate(${anchor.cx} ${anchor.cy}) scale(${anchor.scale})`
+---
+<svg width={size} height={size} viewBox="0 0 48 48" role={label ? 'img' : undefined} aria-label={label} aria-hidden={label ? undefined : 'true'} data-shape={shape}>
+  <g data-part="character">
+    <g data-part="body-shape">
+      {shape === 'circle' && <circle cx="24" cy="24" r="20" fill={color} />}
+      {shape === 'triangle' && <path d="M24 4 45 42H3Z" fill={color} />}
+      {shape === 'drop' && <path d="M24 3C18 13 7 23 7 32a17 17 0 0 0 34 0C41 23 30 13 24 3Z" fill={color} />}
+      {shape === 'hex' && <path d="m24 3 19 11v20L24 45 5 34V14Z" fill={color} />}
+      {shape === 'blob' && <path d="M39 8c7 7 4 18 0 27-4 9-14 12-23 9C7 41 1 32 4 23 7 14 12 4 22 3c6-1 12 1 17 5Z" fill={color} />}
+    </g>
+    <g data-part="face" transform={faceTransform} fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+      <g data-part="eyes">
+        {eyes === 'round' && <><circle cx="-7" cy="-2" r="4" fill="#fff" /><circle cx="7" cy="-2" r="4" fill="#fff" /><circle cx="-7" cy="-2" r="1.6" fill="#18181b" /><circle cx="7" cy="-2" r="1.6" fill="#18181b" /></>}
+        {eyes === 'happy' && <><path d="M-11 0Q-7-5-3 0" /><path d="M3 0Q7-5 11 0" /></>}
+        {eyes === 'sleepy' && <><path d="M-11-1Q-7 1-3-1" /><path d="M3-1Q7 1 11-1" /></>}
+        {eyes === 'wink' && <><circle cx="-7" cy="-2" r="2.5" fill="#fff" stroke="none" /><path d="M3 0Q7-5 11 0" /></>}
+        {eyes === 'dot' && <><circle cx="-7" cy="-2" r="2.5" fill="#fff" stroke="none" /><circle cx="7" cy="-2" r="2.5" fill="#fff" stroke="none" /></>}
+      </g>
+      <g data-part="mouth">
+        {mouth === 'smile' && <path d="M-7 6Q0 13 7 6" />}
+        {mouth === 'grin' && <path d="M-7 6Q0 15 7 6Z" fill="#fff" stroke="none" />}
+        {mouth === 'flat' && <path d="M-6 8H6" />}
+        {mouth === 'open' && <ellipse cx="0" cy="9" rx="4" ry="5" fill="#fff" stroke="none" />}
+      </g>
+    </g>
+    <g data-part="accessory" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+      {accessory === 'glasses' && <g transform={faceTransform}><circle cx="-7" cy="-2" r="6" /><circle cx="7" cy="-2" r="6" /><path d="M-1-2H1" /></g>}
+      {accessory === 'headphones' && <g transform={`translate(${anchor.cx} ${anchor.top})`}><path d="M-16 18Q-16 1 0 1Q16 1 16 18" /><rect x="-19" y="15" width="6" height="11" rx="3" fill="#fff" stroke="none" /><rect x="13" y="15" width="6" height="11" rx="3" fill="#fff" stroke="none" /></g>}
+      {accessory === 'antenna' && <g transform={`translate(${anchor.cx} ${anchor.top + 5})`}><path d="M0 3V-2" /><circle cy="-4" r="3" fill="#fff" stroke="none" /></g>}
+      {accessory === 'bow' && <g transform={`translate(${anchor.cx} ${anchor.top + 4})`}><path d="M0 0C-5-5-10-4-9 2C-8 7-4 5 0 2C4 5 8 7 9 2C10-4 5-5 0 0Z" fill="#fff" stroke="none" /><circle cy="1" r="2" fill="#18181b" stroke="none" /></g>}
+      {accessory === 'hat' && <g transform={`translate(${anchor.cx} ${anchor.top + 7})`}><path d="M-11 0Q0-11 11 0Z" fill="#fff" stroke="none" /><path d="M-13 1H14" /></g>}
+    </g>
+  </g>
+</svg>
+<style>svg { display: block; max-width: 100%; max-height: 100%; flex-shrink: 0; }</style>

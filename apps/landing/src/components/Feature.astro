@@ -1,0 +1,74 @@
+---
+import Button from './Button.astro'
+import Container from './Container.astro'
+import Eyebrow from './Eyebrow.astro'
+
+interface Props {
+  id?: string
+  index?: number
+  eyebrow: string
+  title: string
+  body: string
+  cta: { label: string; href: string }
+  reverse?: boolean
+}
+
+const { id, index, eyebrow, title, body, cta, reverse = false } = Astro.props
+---
+
+<article id={id} class:list={['feature', { reverse }]}>
+  <Container class="feature-grid">
+    <div class="feature-copy">
+      <Eyebrow index={index}>{eyebrow}</Eyebrow>
+      <h2 id={id ? `${id}-title` : undefined}>{title}{id && <a class="anchor" href={`#${id}`} aria-label="Link to this section">#</a>}</h2>
+      <p>{body}</p>
+      <Button href={cta.href} variant="secondary" external>{cta.label}<span aria-hidden="true">↗</span></Button>
+    </div>
+    <div class="feature-visual" data-mock-reveal><slot /></div>
+  </Container>
+</article>
+
+<style>
+  .feature {
+    display: block;
+    padding-block: 4rem;
+    background: var(--color-surface);
+  }
+
+  :global(.feature-grid) {
+    display: grid;
+    align-items: center;
+    gap: 3rem;
+  }
+
+  .feature-copy { max-width: 30rem; }
+  h2 {
+    margin: 0.875rem 0 0;
+    color: var(--color-fg);
+    font-size: 1.75rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+    text-wrap: balance;
+  }
+  p {
+    margin: 1.25rem 0 1.75rem;
+    color: var(--color-fg-muted);
+    font-size: 1rem;
+    line-height: 1.6;
+  }
+  .feature-visual { min-width: 0; }
+
+  @media (min-width: 48rem) {
+    :global(.feature-grid) { grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr); gap: 5rem; }
+    .reverse :global(.feature-grid) { grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr); }
+    .reverse .feature-copy { order: 2; }
+    .reverse .feature-visual { order: 1; }
+  }
+
+  @media (min-width: 64rem) {
+    .feature { padding-block: 6rem; }
+    :global(.feature-grid) { gap: 7rem; }
+    h2 { font-size: 2.25rem; }
+  }
+</style>

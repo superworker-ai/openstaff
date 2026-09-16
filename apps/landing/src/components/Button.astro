@@ -1,0 +1,108 @@
+---
+interface Props {
+  href: string
+  variant?: 'primary' | 'secondary'
+  tone?: 'default' | 'inverse'
+  size?: 'md' | 'lg'
+  external?: boolean
+  class?: string
+}
+
+const {
+  href,
+  variant = 'primary',
+  tone = 'default',
+  size = 'md',
+  external = false,
+  class: className = '',
+} = Astro.props
+---
+
+<a
+  class:list={['button', `button-${variant}`, `button-${size}`, `button-${tone}`, className]}
+  {href}
+  target={external ? '_blank' : undefined}
+  rel={external || href.startsWith('http') ? 'noopener' : undefined}
+>
+  <slot />
+</a>
+
+<style>
+  .button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border: 1px solid transparent;
+    border-radius: var(--radius-md);
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1;
+    text-decoration: none;
+    white-space: nowrap;
+    transition:
+      background-color 150ms var(--ease-out),
+      border-color 150ms var(--ease-out),
+      color 150ms var(--ease-out),
+      transform 150ms var(--ease-out);
+  }
+
+  .button-md {
+    min-height: 2.5rem;
+    padding-inline: 1rem;
+  }
+
+  .button-lg {
+    min-height: 3rem;
+    padding-inline: 1.25rem;
+    font-size: 0.9375rem;
+  }
+
+  .button-primary {
+    background: var(--color-accent);
+    color: var(--color-accent-fg);
+  }
+
+  .button-secondary {
+    border-color: var(--color-line-strong);
+    background: var(--color-surface);
+    color: var(--color-fg);
+  }
+
+  .button-secondary.button-inverse {
+    border-color: rgb(255 255 255 / .2);
+    background: rgb(255 255 255 / .12);
+    color: #fff;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .button-primary:hover {
+      background: color-mix(in srgb, var(--color-accent), black 8%);
+    }
+
+    .button-secondary:hover {
+      background: color-mix(in srgb, var(--color-surface), black 8%);
+    }
+    .button-secondary.button-inverse:hover {
+      background: color-mix(in srgb, rgb(255 255 255 / .12), black 8%);
+      border-color: rgb(255 255 255 / .4);
+    }
+  }
+
+  .button:active:not(:focus-visible) {
+    transform: scale(0.98);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .button {
+      transition:
+        background-color 150ms linear,
+        border-color 150ms linear,
+        color 150ms linear;
+    }
+
+    .button:active:not(:focus-visible) {
+      transform: none;
+    }
+  }
+</style>

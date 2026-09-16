@@ -1,0 +1,35 @@
+---
+import { faq } from '../content/landing'
+import Container from './Container.astro'
+
+
+---
+
+<section class="faq" aria-labelledby="faq">
+  <Container class="faq-grid">
+    <h2 id="faq">{faq.title}<a class="anchor" href="#faq" aria-label="Link to this section">#</a></h2>
+    <div class="items">
+      {faq.questions.map((item) => (
+        <details>
+          <summary>{item.question}<span aria-hidden="true">+</span></summary>
+          <p>{item.answer}</p>
+        </details>
+      ))}
+    </div>
+  </Container>
+</section>
+
+<style>
+  .faq { padding-block: 4rem; background: var(--color-surface); }
+  :global(.faq-grid) { display: grid; gap: 2.5rem; }
+  h2 { margin: 0; font-size: 1.75rem; font-weight: 600; letter-spacing: -0.02em; line-height: 1.15; }
+  .items { border-top: 1px solid var(--color-line-strong); }
+  details { border-bottom: 1px solid var(--color-line-strong); }
+  summary { display: flex; min-height: 4rem; cursor: pointer; list-style: none; align-items: center; justify-content: space-between; gap: 1rem; color: var(--color-fg); font-size: 0.9375rem; font-weight: 600; }
+  summary::-webkit-details-marker { display: none; }
+  summary span { color: var(--color-fg-muted); font-size: 1.25rem; font-weight: 400; }
+  details[open] summary span { transform: rotate(45deg); }
+  p { max-width: 44rem; margin: -0.25rem 0 1.25rem; color: var(--color-fg-muted); font-size: 0.9375rem; line-height: 1.6; }
+  @media (min-width: 48rem) { :global(.faq-grid) { grid-template-columns: 0.4fr 1fr; gap: 5rem; } }
+  @media (min-width: 64rem) { .faq { padding-block: 6rem; } h2 { font-size: 2.25rem; } }
+</style>

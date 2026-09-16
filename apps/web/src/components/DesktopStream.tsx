@@ -1,19 +1,44 @@
-import { useEffect, useRef, useState } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useState, type ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Maximize2, RefreshCw } from 'lucide-react'
 import type { ComputerLease, User } from '@openstaff/shared'
 import { api } from '../lib/api'
 
 export const DESKTOP_STREAM_SRC = '/api/computer/desktop/?autoconnect=1&reconnect=1&view_only=1&resize=scale&show_control_bar=0&path=api%2Fcomputer%2Fdesktop%2Fwebsockify'
 const CONTROL_STREAM_SRC = '/api/computer/desktop/?autoconnect=1&reconnect=1&resize=scale&show_control_bar=0&mode=control&path=api%2Fcomputer%2Fdesktop%2Fwebsockify%3Fmode%3Dcontrol'
 
-function remaining(expiresAt: string | null, now: number): string {
-  const seconds = Math.max(0, Math.ceil(((expiresAt ? Date.parse(expiresAt) : now) - now) / 1000))
-  return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`
+export interface DesktopStreamHandle {
+  reconnect: () => Promise<void>
 }
 
-export function DesktopStream({ lease, me, kind = 'proxied' }: { lease: ComputerLease; me: Pick<User, 'id' | 'name' | 'role'>; kind?: 'proxied' | 'external' }) {
-  const container = useRef<HTMLDivElement>(null)
+interface LeaseControlsProps {
+  lease: ComputerLease
+  me: Pick<User, 'id' | 'name' | 'role'>
+  busy: boolean
+  error: string
+  onUpdateLease: (action: 'take' | 'release', force?: boolean) => void
+}
+
+export function LeaseControls({ lease, me, busy, error, onUpdateLease }: LeaseControlsProps) {
+  const mine = lease.ownerKind === 'human' && lease.ownerId === me.id
+  return <div className="activity-lease">
+    <div>
+      {lease.ownerKind === 'bot' && <button type="button" disabled={busy} onClick={() => onUpdateLease('take')}>Take over</button>}
+      {mine && <button type="button" disabled={busy} onClick={() => onUpdateLease('release')}>Return control</button>}
+      {lease.ownerKind === 'human' && !mine && me.role === 'owner' && <button type="button" disabled={busy} onClick={() => onUpdateLease('release', true)}>Force return</button>}
+    </div>
+    {mine && <p>Your input goes straight to the computer. Control returns automatically.</p>}
+    {error && <p role="alert">{error}</p>}
+  </div>
+}
+
+interface DesktopStreamProps {
+  lease: ComputerLease
+  me: Pick<User, 'id' | 'name' | 'role'>
+  kind?: 'proxied' | 'external'
+  renderOverlay: (leaseControls: ReactNode) => ReactNode
+}
+
+export const DesktopStream = forwardRef<DesktopStreamHandle, DesktopStreamProps>(function DesktopStream({ lease, me, kind = 'proxied', renderOverlay }, ref) {
   const queryClient = useQueryClient()
   const [activeLease, setActiveLease] = useState(lease)
   const [key, setKey] = useState(0)
@@ -21,16 +46,9 @@ export function DesktopStream({ lease, me, kind = 'proxied' }: { lease: Computer
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [externalSource, setExternalSource] = useState('')
-  const [now, setNow] = useState(Date.now())
   const mine = activeLease.ownerKind === 'human' && activeLease.ownerId === me.id
 
   useEffect(() => setActiveLease(lease), [lease])
-  useEffect(() => {
-    if (!mine) return
-    setNow(Date.now())
-    const timer = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(timer)
-  }, [mine, activeLease.expiresAt])
   useEffect(() => {
     if (!mine) return
     const timer = setInterval(() => {
@@ -52,6 +70,16 @@ export function DesktopStream({ lease, me, kind = 'proxied' }: { lease: Computer
   }, [kind, activeLease.epoch, mine, key])
 
   const reconnect = () => { setFailed(false); setKey((value) => value + 1) }
+  // External streams (E2B) authenticate with a per-process key; rotating it on Reconnect recovers
+  // "password check failed" after a server restart or an outside stream restart.
+  const reconnectExternal = async () => {
+    if (kind !== 'external') return reconnect()
+    setBusy(true); setError('')
+    try { await api('/api/computer/desktop/session/rotate', { method: 'POST', body: '{}' }) }
+    catch (reason) { setError(reason instanceof Error ? reason.message : 'Stream refresh failed') }
+    finally { setBusy(false); reconnect() }
+  }
+  useImperativeHandle(ref, () => ({ reconnect: reconnectExternal }))
   const updateLease = async (action: 'take' | 'release', force = false) => {
     setBusy(true); setError('')
     try {
@@ -65,33 +93,13 @@ export function DesktopStream({ lease, me, kind = 'proxied' }: { lease: Computer
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Control request failed') }
     finally { setBusy(false) }
   }
-  const label = activeLease.ownerKind === 'bot'
-    ? 'Live · Bot in control'
-    : mine
-      ? `You have control · returns in ${remaining(activeLease.expiresAt, now)}`
-      : `${activeLease.ownerName ?? 'Another member'} has control`
   const source = kind === 'external' ? externalSource : mine ? CONTROL_STREAM_SRC : DESKTOP_STREAM_SRC
-  const controlClass = 'rounded-md border border-zinc-600 px-2 py-1 text-[11px] font-medium text-white disabled:opacity-50'
 
-  return <div ref={container} className="relative mb-4 overflow-hidden rounded-xl border border-zinc-200 bg-zinc-950">
-    <div className="border-b border-zinc-700 bg-zinc-900 px-3 py-2 text-white">
-      <div className="flex items-center justify-between gap-2">
-        <span className="flex min-w-0 items-center gap-2 truncate text-xs font-medium"><span className="h-2 w-2 shrink-0 rounded-full bg-emerald-400" />{label}</span>
-        <div className="flex shrink-0 gap-1">
-          <button type="button" onClick={reconnect} aria-label="Reconnect desktop" className="rounded p-1 text-zinc-300 hover:bg-zinc-800 hover:text-white"><RefreshCw size={14} /></button>
-          <button type="button" onClick={() => container.current?.requestFullscreen()} aria-label="Open desktop fullscreen" className="rounded p-1 text-zinc-300 hover:bg-zinc-800 hover:text-white"><Maximize2 size={14} /></button>
-        </div>
-      </div>
-      <div className="mt-2 flex items-center gap-2">
-        {activeLease.ownerKind === 'bot' && <button type="button" disabled={busy} onClick={() => void updateLease('take')} className={controlClass}>Take over</button>}
-        {mine && <button type="button" disabled={busy} onClick={() => void updateLease('release')} className={controlClass}>Return control</button>}
-        {activeLease.ownerKind === 'human' && !mine && me.role === 'owner' && <button type="button" disabled={busy} onClick={() => void updateLease('release', true)} className={controlClass}>Force return</button>}
-        {error && <span role="alert" className="truncate text-[11px] text-red-300">{error}</span>}
-      </div>
-    </div>
+  return <div className="absolute inset-0 overflow-hidden bg-screen">
     {source
-      ? <iframe key={`${key}:${activeLease.epoch}:${mine}`} title="Live Computer desktop" src={source} sandbox={kind === 'proxied' ? 'allow-scripts allow-same-origin' : undefined} allow="clipboard-read; clipboard-write" onError={() => setFailed(true)} className="aspect-[8/5] w-full bg-black" />
-      : <div className="grid aspect-[8/5] w-full place-items-center bg-black text-xs text-zinc-400">Connecting to desktop…</div>}
-    {failed && <button type="button" onClick={reconnect} className="absolute inset-x-4 bottom-4 rounded-lg bg-white px-3 py-2 text-xs font-medium text-zinc-800 shadow">Desktop disconnected. Reconnect</button>}
+      ? <iframe key={`${key}:${activeLease.epoch}:${mine}`} title="Live Computer desktop" src={source} sandbox={kind === 'proxied' ? 'allow-scripts allow-same-origin' : undefined} allow="clipboard-read; clipboard-write" onError={() => setFailed(true)} className="absolute inset-0 h-full w-full bg-black" />
+      : <div className="absolute inset-0 grid place-items-center bg-black text-xs text-fg-muted">Connecting to desktop…</div>}
+    {renderOverlay(<LeaseControls lease={activeLease} me={me} busy={busy} error={error} onUpdateLease={(action, force) => void updateLease(action, force)} />)}
+    {failed && <button type="button" onClick={() => void reconnectExternal()} className="absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2 rounded-md bg-accent px-4 py-2 text-xs font-medium text-accent-fg shadow">Desktop disconnected. Reconnect</button>}
   </div>
-}
+})

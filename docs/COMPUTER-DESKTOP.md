@@ -70,9 +70,9 @@ The desktop supervisor starts one long-lived Chromium on the desktop display wit
 dedicated profile `/home/worker/.config/superworkers/chrome` (Chrome ≥136 refuses remote
 debugging on the default profile) and a loopback CDP socket forwarded to container port
 9222. The server attaches with `chromium.connectOverCDP(...)`, uses
-`browser.contexts()[0]` (the persistent default context), and opens one *tab* per turn
-exactly as today. Humans watching the stream see the same tabs the bot drives; cookies and
-logins are shared by construction, matching Grok.
+`browser.contexts()[0]` (the persistent default context). Turns reuse the visible desktop tab;
+`newTab` opens another, and tabs persist across turns. Humans watching the stream see the same
+tabs the bot drives; cookies and logins are shared by construction, matching Grok.
 
 Rules: the server never calls `browser.close()`; on CDP disconnect it reconnects and
 re-adopts tabs by target id; `page.screenshot` continues to feed model observations and
@@ -208,10 +208,11 @@ snapshot because they use fewer tokens and are less sensitive to layout changes.
 
 Browser and desktop actions use one workspace display mutex and the same fenced takeover lease.
 If a human holds control, a bot action records paused/resumed status and takes a fresh observation
-after control returns. Browser and desktop captures also share one `ScreenRecorder`, so JPEGs
-interleave safely under `DATA_DIR/screens/<turnId>/<n>.jpg`. Events contain only the authenticated
-URL and metadata (`source: desktop`, width, height), never image base64. Inline image parts are
-removed before resumable model messages are persisted.
+after control returns. Browser turns reuse the visible desktop tab; `newTab` opens another, and
+tabs persist across turns. Browser and desktop captures also share one `ScreenRecorder`, so
+JPEGs interleave safely under `DATA_DIR/screens/<turnId>/<n>.jpg`. Events contain only the
+authenticated URL and metadata (`source: desktop`, width, height), never image base64. Inline
+image parts are removed before resumable model messages are persisted.
 Before each model step and on approval resume, context retains images from only the latest `COMPUTER_SCREENSHOT_CONTEXT` image-bearing tool results (default 3), replacing older images with screenshot URL text.
 
 Desktop observations are JPEG quality 60 at the native 1280×800 resolution so shown coordinates

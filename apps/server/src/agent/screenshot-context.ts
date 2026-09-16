@@ -15,7 +15,7 @@ function screenshotUrl(parts: unknown[]): string | undefined {
 }
 
 function inlineImage(value: unknown): boolean {
-  return record(value) && value.type === 'file-data' && typeof value.mediaType === 'string' && value.mediaType.startsWith('image/')
+  return record(value) && (value.type === 'file-data' || value.type === 'image-data') && typeof value.mediaType === 'string' && value.mediaType.startsWith('image/')
 }
 
 function containsImage(value: unknown): boolean {
@@ -30,7 +30,7 @@ function replaceFileData(value: unknown, label: string, imagesOnly: boolean, url
     return value.map((part) => replaceFileData(part, label, imagesOnly, siblingUrl))
   }
   if (!record(value)) return value
-  if (value.type === 'file-data' && (!imagesOnly || inlineImage(value))) {
+  if ((value.type === 'file-data' || value.type === 'image-data') && (!imagesOnly || inlineImage(value))) {
     return { type: 'text', text: `[${label} ${url ?? 'unavailable'}]` }
   }
   return Object.fromEntries(Object.entries(value).map(([key, part]) => [key, replaceFileData(part, label, imagesOnly, url)]))

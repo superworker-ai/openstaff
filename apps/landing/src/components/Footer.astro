@@ -1,0 +1,68 @@
+---
+import { APP_URL, GITHUB_URL } from '../config'
+import Container from './Container.astro'
+import BrandMark from './BrandMark.astro'
+
+interface FooterGroup {
+  title: string
+  links: Array<{ label: string; href: string; external?: boolean }>
+}
+
+const groups: FooterGroup[] = [
+  {
+    title: 'Product',
+    links: [
+      { label: 'Get started', href: APP_URL },
+      { label: 'Log in', href: APP_URL },
+    ],
+  },
+  {
+    title: 'Resources',
+    links: [
+      { label: 'GitHub', href: GITHUB_URL, external: true },
+      { label: 'Markdown', href: '/llms.txt' },
+      { label: 'Docs', href: `${GITHUB_URL}/tree/main/docs`, external: true },
+      { label: 'Security', href: `${GITHUB_URL}/blob/main/SECURITY.md`, external: true },
+    ],
+  },
+  {
+    title: 'Company',
+    links: [
+      { label: 'License', href: `${GITHUB_URL}/blob/main/LICENSE`, external: true },
+    ],
+  },
+]
+---
+
+<div class="footer-shell">
+  <Container>
+    <div class="footer-main">
+      <div class="brand"><BrandMark /><strong>OpenStaff</strong></div>
+      <div class="groups">
+        {groups.map((group) => (
+          <div class="group">
+            <strong>{group.title}</strong>
+            {group.links.map((link) => (
+              <a href={link.href} target={link.external ? '_blank' : undefined} rel={link.external || link.href.startsWith('http') ? 'noopener' : undefined}>{link.label}</a>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+    <div class="copyright">© 2026 OpenStaff</div>
+  </Container>
+</div>
+
+<style>
+  .footer-shell { padding-block: 3rem 2rem; border-top: 1px solid var(--color-line); background: var(--color-app); }
+  .footer-main { display: grid; gap: 2.5rem; }
+  .brand { display: flex; align-items: center; gap: 0.625rem; height: fit-content; font-size: 0.9375rem; }
+  .groups { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2rem; }
+  .group { display: flex; flex-direction: column; gap: 0.625rem; }
+  .group strong { margin-bottom: 0.25rem; color: var(--color-fg); font-size: 0.75rem; }
+  .group a { width: fit-content; color: var(--color-fg-muted); font-size: 0.8125rem; text-decoration: none; }
+  .copyright { margin-top: 3rem; padding-top: 1.25rem; border-top: 1px solid var(--color-line); color: var(--color-fg-subtle); font-size: 0.75rem; }
+  @media (hover: hover) and (pointer: fine) { .group a:hover { color: var(--color-fg); } }
+  @media (min-width: 48rem) { .footer-main { grid-template-columns: 1fr 1.4fr; } }
+  @media (max-width: 35rem) { .groups { grid-template-columns: repeat(2, 1fr); } }
+</style>

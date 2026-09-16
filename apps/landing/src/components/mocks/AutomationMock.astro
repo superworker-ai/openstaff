@@ -1,0 +1,53 @@
+<div class="mock-shell" data-mock="dark" role="img" aria-label="Weekly support recap automation and its invocation history">
+  <div class="inner" aria-hidden="true">
+    <div class="automation-card">
+      <div class="automation-head"><div class="automation-icon">↻</div><div><span>Automation</span><strong>Weekly support recap</strong></div><b>On</b></div>
+      <div class="schedule"><span>Schedule</span><strong>Fridays · 9:00</strong></div>
+      <div class="history-title">Invocation history</div>
+      <div class="run"><i class="done"></i><div><strong>Done</strong><span>Latest run</span></div><time>4m 12s</time></div>
+      <div class="run"><i class="done"></i><div><strong>Done</strong><span>Previous run</span></div><time>3m 58s</time></div>
+      <div class="run"><i class="waiting"></i><div><strong>Needs approval</strong><span>Earlier run</span></div><time>Waiting</time></div>
+    </div>
+    <div class="webhook"><i>⌁</i><div><span>Webhook ready</span><strong>/support/recap</strong></div><b>Copy URL</b></div>
+  </div>
+</div>
+
+<style>
+  .mock-shell { overflow: hidden; border: 1px solid var(--color-line-strong); border-radius: var(--radius-xl); background: var(--color-app); color: var(--color-fg); box-shadow: 0 24px 60px rgb(42 28 0 / 0.12); }
+  .inner { min-height: 29rem; padding: 3rem; background-color: var(--color-app);
+    background-image: linear-gradient(rgb(13 13 15 / .25), rgb(13 13 15 / .55)), radial-gradient(circle at 55% 35%, rgb(29 42 68 / .25), rgb(13 13 15 / .1)), image-set(url('/wallpaper/computer-wallpaper-dark.webp') 1x);
+    background-position: center;
+    background-size: cover; }
+  .automation-card { overflow: hidden; border: 1px solid var(--color-line-strong); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: 0 24px 60px rgb(0 0 0 / 0.3); }
+  .automation-head { display: grid; align-items: center; gap: 0.75rem; grid-template-columns: 2.5rem 1fr auto; padding: 1rem; border-bottom: 1px solid var(--color-line); }
+  .automation-icon { display: grid; width: 2.5rem; height: 2.5rem; place-items: center; border-radius: 0.65rem; background: color-mix(in srgb, var(--color-accent) 20%, var(--color-surface)); color: #72adff; font-size: 1.1rem; }
+  .automation-head span,
+  .automation-head strong { display: block; }
+  .automation-head span { color: var(--color-fg-muted); font-size: 0.625rem; }
+  .automation-head strong { font-size: 0.8125rem; }
+  .automation-head b { padding: 0.3rem 0.55rem; border-radius: 999px; background: color-mix(in srgb, var(--color-ok) 17%, var(--color-surface)); color: #74dcae; font-size: 0.625rem; }
+  .schedule { display: flex; align-items: center; justify-content: space-between; padding: 0.875rem 1rem; border-bottom: 1px solid var(--color-line); color: var(--color-fg-muted); font-size: 0.6875rem; }
+  .schedule strong { color: var(--color-fg); font-weight: 500; }
+  .history-title { padding: 1rem 1rem 0.5rem; color: var(--color-fg-subtle); font-size: 0.625rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
+  .run { display: grid; align-items: center; gap: 0.75rem; grid-template-columns: 0.5rem 1fr auto; padding: 0.75rem 1rem; border-top: 1px solid var(--color-line); }
+  .run i { width: 0.5rem; height: 0.5rem; border-radius: 50%; }
+  .done { background: var(--color-ok); }
+  .waiting { background: var(--color-waiting); }
+  .run strong,
+  .run span { display: block; font-size: 0.6875rem; }
+  .run span,
+  .run time { color: var(--color-fg-muted); font-size: 0.625rem; }
+  .webhook { display: grid; width: 82%; align-items: center; gap: 0.75rem; grid-template-columns: 2rem 1fr auto; margin: 1.25rem auto 0; padding: 0.75rem; border: 1px solid var(--color-line-strong); border-radius: var(--radius-md); background: var(--color-glass); box-shadow: 0 16px 35px rgb(0 0 0 / 0.22); backdrop-filter: blur(10px); }
+  .webhook i { display: grid; width: 2rem; height: 2rem; place-items: center; border-radius: 0.5rem; background: var(--color-surface-3); color: var(--color-fg); font-style: normal; }
+  .webhook span,
+  .webhook strong { display: block; }
+  .webhook span { color: var(--color-fg-muted); font-size: 0.625rem; }
+  .webhook strong { font: 0.625rem ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .webhook b { color: #72adff; font-size: 0.625rem; }
+  @media (max-width: 35rem) { .inner { min-height: 24rem; padding: 1.5rem 1rem; } .webhook { width: 94%; } }
+  @media (max-width: 47.999rem) {
+    .inner {
+      background-image: linear-gradient(rgb(13 13 15 / .25), rgb(13 13 15 / .55)), radial-gradient(circle at 55% 35%, rgb(29 42 68 / .25), rgb(13 13 15 / .1)), image-set(url('/wallpaper/computer-wallpaper-dark-sm.webp') 1x, url('/wallpaper/computer-wallpaper-dark.webp') 2x);
+    }
+  }
+</style>

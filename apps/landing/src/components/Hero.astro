@@ -1,0 +1,73 @@
+---
+import { hero } from '../content/landing'
+import AppMock from './mocks/AppMock.astro'
+import Container from './Container.astro'
+import Eyebrow from './Eyebrow.astro'
+---
+
+<section class="hero" aria-labelledby="hero-title">
+  <Container>
+    <div class="hero-copy">
+      <Eyebrow>{hero.eyebrow}</Eyebrow>
+      <h2 id="hero-title">{hero.title}</h2>
+      <p class="lede">{hero.body}</p>
+    </div>
+    <div class="hero-mock" data-mock-reveal><AppMock /></div>
+  </Container>
+</section>
+
+<style>
+  .hero {
+    overflow: hidden;
+    padding-block: 5rem 4rem;
+    background: var(--color-surface);
+  }
+
+  .hero-copy {
+    display: flex;
+    max-width: 54rem;
+    margin-inline: auto;
+    align-items: center;
+    flex-direction: column;
+    text-align: center;
+  }
+
+  h2 {
+    max-width: 14ch;
+    margin: 1rem 0 0;
+    color: var(--color-fg);
+    font-size: 2.5rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.06;
+    text-wrap: balance;
+  }
+
+  .lede {
+    max-width: 60ch;
+    margin: 1.5rem 0 0;
+    color: var(--color-fg-muted);
+    font-size: 1.0625rem;
+    line-height: 1.65;
+    text-wrap: pretty;
+  }
+
+  .hero-mock {
+    margin-top: 4rem;
+  }
+
+  @media (min-width: 64rem) {
+    .hero {
+      padding-block: 6rem 4rem;
+    }
+
+    h2 {
+      font-size: 3.5rem;
+    }
+
+    .lede {
+      font-size: 1.125rem;
+    }
+  }
+
+</style>

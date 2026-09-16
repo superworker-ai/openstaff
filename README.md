@@ -12,7 +12,7 @@ pnpm i
 cp .env.example .env
 ```
 
-Set `XAI_API_KEY` in `.env`, then run:
+Set one model key (`XAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENCODE_API_KEY`, or `AI_GATEWAY_API_KEY`) in `.env`, then run:
 
 ```bash
 pnpm dev
@@ -26,6 +26,12 @@ The default computer driver is local. It can execute commands with the server us
 permissions: use Docker for command isolation. The shell's path jail protects file tools,
 not arbitrary shell programs. Do not expose this single-workspace development app to
 untrusted users.
+
+## Landing page
+
+The static OpenStaff marketing site lives in `apps/landing`.
+Run it locally with `pnpm dev:landing`.
+`pnpm --filter landing build` outputs the production site to `apps/landing/dist`.
 
 ## Browser setup
 
@@ -178,7 +184,7 @@ pnpm db:restore <backup.db>
 pnpm db:restore s3://backups/<backup.db>
 ```
 
-The default models are `xai/grok-4.6`, `anthropic/claude-sonnet-5`, and `openai/gpt-5.6-sol`. Model identifiers always use the `provider/model` form. When an AI Gateway key is saved in Settings or supplied through `AI_GATEWAY_API_KEY`, model calls go through the AI Gateway.
+The catalog includes direct xAI, Anthropic, and OpenAI models, plus OpenCode Zen models under `opencode/<model>` and OpenCode Go models under `opencode-go/<model>`. One `OPENCODE_API_KEY` serves both OpenCode prefixes. Zen is pay per token; Go quotas belong to the OpenCode account. Reasoning effort is not configurable for OpenCode models. Model identifiers always use the `provider/model` form. When an AI Gateway key is saved in Settings or supplied through `AI_GATEWAY_API_KEY`, non-OpenCode model calls go through the AI Gateway; OpenCode Zen and Go always connect directly.
 
 ## Plugins and connected apps
 
@@ -270,7 +276,7 @@ Live status dots in Members are green (connected), yellow (expired), or grey (no
 ## Settings and secrets
 
 Settings contains Providers, Models, Plugins, Connections, and Automations. The model
-catalog includes Grok 4.6/4.5, Claude Sonnet 5/Opus 5, and GPT 5.6 Sol/Luna.
+catalog includes Grok 4.6/4.5, Claude Sonnet 5/Opus 5, GPT 5.6 Sol/Luna, and OpenCode Zen and Go models.
 Saved provider keys take precedence over environment variables; clearing a saved key
 restores the environment fallback. Keys and plugin variables are encrypted at rest
 with AES-256-GCM and are never returned to the browser.

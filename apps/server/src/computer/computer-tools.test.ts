@@ -34,7 +34,7 @@ it('enforces coordinate, text, scroll, wait, key, and window schema bounds', () 
   expect(computerToolSchemas.focusWindow.parse({ titleContains: 'Chrome' })).toEqual({ titleContains: 'Chrome' })
 })
 
-it('returns text plus JPEG file-data from a recorded screenshot', async () => {
+it('returns text plus an image-data part from a recorded screenshot', async () => {
   const f = await fixture()
   try {
     const turnId = (await f.admission.post({ roomId: f.roomId, authorKind: 'user', authorId: f.userId, text: 'screen' })).turns[0]!.id
@@ -44,7 +44,7 @@ it('returns text plus JPEG file-data from a recorded screenshot', async () => {
     const model = await computerModelOutput(screen, { ...output, width: 1280, height: 800, cursor: { x: 412, y: 300 }, message: 'clicked' })
     expect(model).toEqual({ type: 'content', value: [
       { type: 'text', text: expect.stringContaining('screen 1280x800, cursor at 412,300') },
-      { type: 'file-data', data: Buffer.from([0xff, 0xd8, 0xff, 0xd9]).toString('base64'), mediaType: 'image/jpeg' },
+      { type: 'image-data', data: Buffer.from([0xff, 0xd8, 0xff, 0xd9]).toString('base64'), mediaType: 'image/jpeg' },
     ] })
   } finally { await f.close() }
 })

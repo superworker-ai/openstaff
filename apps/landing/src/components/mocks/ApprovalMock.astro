@@ -1,0 +1,42 @@
+---
+import BotFace from '../BotFace.astro'
+import { bots } from '../../content/landing'
+const [ops] = bots
+---
+
+<div class="thread" data-mock="dark" role="img" aria-label={`An approval card pausing ${ops.name}\'s email action inside a conversation`}>
+  <div class="inner" aria-hidden="true">
+    <div class="message"><div class="sender"><span class="avatar" title={ops.fullName}><BotFace {...ops.avatar} /></span><span>{ops.name} · {ops.role}</span></div><p>I drafted the follow-up. It is ready when you are.</p></div>
+    <div class="approval-card">
+      <div class="approval-label"><i>!</i><span>Approval required</span></div>
+      <strong>Send email to sara@acme.com?</strong>
+      <div class="preview"><b>Launch plan follow-up</b><span>Hi Sara, here is the updated plan and the three items we need from your team…</span></div>
+      <div class="actions"><span class="mock-button approve">Approve</span><span class="mock-button decline">Decline</span></div>
+    </div>
+    <div class="status"><i></i> {ops.name} is waiting for you</div>
+  </div>
+</div>
+
+<style>
+  .thread { overflow: hidden; border: 1px solid var(--color-line-strong); border-radius: var(--radius-xl); background: var(--color-app); color: var(--color-fg); box-shadow: 0 24px 60px rgb(42 28 0 / 0.12); }
+  .inner { min-height: 25rem; padding: 2.25rem; background: var(--color-surface); }
+  .message { max-width: 80%; }
+  .sender { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.5rem; }
+  .avatar { width: 2rem; height: 2rem; }
+  .sender > span { display: block; margin: 0 0 0.3rem 0.25rem; color: var(--color-fg-muted); font-size: 0.625rem; }
+  .message p { width: fit-content; margin: 0; padding: 0.75rem 0.875rem; border-radius: 1rem 1rem 1rem 0.3rem; background: var(--color-surface-3); font-size: 0.75rem; }
+  .approval-card { max-width: 26rem; margin: 1rem 0 0 1.25rem; padding: 1rem; border: 1px solid var(--color-line-strong); border-radius: var(--radius-lg); background: var(--color-surface-2); box-shadow: 0 14px 30px rgb(0 0 0 / 0.18); }
+  .approval-label { display: flex; align-items: center; gap: 0.4rem; color: #ffd080; font-size: 0.625rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+  .approval-label i { display: grid; width: 1.1rem; height: 1.1rem; place-items: center; border-radius: 50%; background: color-mix(in srgb, var(--color-waiting) 18%, transparent); font-style: normal; }
+  .approval-card > strong { display: block; margin-top: 0.7rem; font-size: 0.875rem; }
+  .preview { display: grid; gap: 0.3rem; margin-top: 0.8rem; padding: 0.75rem; border: 1px solid var(--color-line); border-radius: var(--radius-md); background: var(--color-surface); }
+  .preview b { font-size: 0.6875rem; }
+  .preview span { color: var(--color-fg-muted); font-size: 0.6875rem; line-height: 1.5; }
+  .actions { display: flex; gap: 0.5rem; margin-top: 0.8rem; }
+  .mock-button { display: grid; min-height: 2rem; place-items: center; padding-inline: 0.75rem; border: 1px solid transparent; border-radius: var(--radius-sm); font: 600 0.6875rem Inter, sans-serif; }
+  .approve { background: var(--color-ok); color: #0d2e22; }
+  .decline { border-color: var(--color-line-strong); background: var(--color-surface); color: var(--color-fg); }
+  .status { margin: 1rem 0 0 1.5rem; color: var(--color-fg-muted); font-size: 0.625rem; }
+  .status i { display: inline-block; width: 0.4rem; height: 0.4rem; margin-right: 0.3rem; border-radius: 50%; background: var(--color-waiting); }
+  @media (max-width: 35rem) { .inner { min-height: 22rem; padding: 1.25rem; } .approval-card { margin-left: 0.5rem; } }
+</style>

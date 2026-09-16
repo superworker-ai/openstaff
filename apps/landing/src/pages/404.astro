@@ -1,0 +1,24 @@
+---
+import Button from '../components/Button.astro'
+import Container from '../components/Container.astro'
+import Base from '../layouts/Base.astro'
+---
+
+<Base title="Page not found · OpenStaff" description="The page you were looking for could not be found.">
+  <section class="not-found">
+    <Container>
+      <p>404</p>
+      <h1>That page wandered off.</h1>
+      <span>The rest of your staff is still here.</span>
+      <div><Button href="/" size="lg">Back to OpenStaff</Button></div>
+    </Container>
+  </section>
+</Base>
+
+<style>
+  .not-found { display: grid; min-height: 70vh; place-items: center; padding-block: 9rem 5rem; text-align: center; }
+  p { margin: 0; color: var(--color-accent); font-size: 0.8125rem; font-weight: 600; letter-spacing: 0.08em; }
+  h1 { margin: 0.75rem 0; font-size: clamp(2.5rem, 6vw, 3.5rem); font-weight: 600; letter-spacing: -0.02em; line-height: 1.08; }
+  span { color: var(--color-fg-muted); }
+  div { margin-top: 2rem; }
+</style>

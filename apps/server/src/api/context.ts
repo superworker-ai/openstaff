@@ -13,6 +13,7 @@ import type { ComposioService } from '../composio/service.js'
 import type { AutomationService } from '../automations/service.js'
 import type { ComputerLeaseService } from '../computer/lease.js'
 import type { DurableWorkspace } from '../storage/durable.js'
+import type { ModelResolver } from '../agent/models.js'
 
 export type AppEnv = { Variables: AppVariables }
 export type ApiApp = Hono<AppEnv>
@@ -24,6 +25,7 @@ export interface ApiDependencies {
   installer: PluginInstaller
   composio: ComposioService
   automationService: AutomationService
+  modelResolver: ModelResolver
   db: Database
   config: Config
   computer: ComputerManager

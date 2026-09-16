@@ -17,10 +17,27 @@ interface CdpContext {
   context: BrowserContext
 }
 
+interface SessionPage {
+  page: Page
+  mode: 'local' | 'cdp'
+  created: boolean
+  reAdopted?: boolean
+}
+
 export interface BrowserServiceOptions { lease?: ComputerLeaseGate; displayGate?: DisplayGate }
 
 const noDesktop = async (): Promise<DesktopEndpoints | null> => null
 const delay = (milliseconds: number) => new Promise<void>((resolve) => setTimeout(resolve, milliseconds))
+// A desktop tab whose renderer is frozen, discarded, or busy never answers CDP page commands.
+// Probes must give up quickly or one dead tab blocks every turn behind the display gate.
+const PROBE_MS = 1500
+const CLOSE_WAIT_MS = 5000
+function bounded<T>(promise: Promise<T>, milliseconds: number, fallback: T): Promise<T> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(fallback), milliseconds)
+    promise.then((value) => { clearTimeout(timer); resolve(value) }, () => { clearTimeout(timer); resolve(fallback) })
+  })
+}
 
 export class BrowserService {
   private localContext?: Promise<BrowserContext>
@@ -101,26 +118,74 @@ export class BrowserService {
     } finally { await session.detach().catch(() => undefined) }
   }
 
-  private async pageForTurn(turnId: string): Promise<Page> {
-    const desktop = await this.desktop()
-    if (!desktop) return (await this.getLocalContext()).newPage()
-    const { context } = await this.getCdpContext(desktop.cdpUrl)
+  private probeTargetId(context: BrowserContext, page: Page): Promise<string | null> {
+    return bounded(this.targetId(context, page), PROBE_MS, null)
+  }
+
+  private async register(turnId: string, context: BrowserContext, page: Page): Promise<void> {
+    const target = await this.probeTargetId(context, page)
+    if (target) this.targets.set(turnId, target)
+    else this.targets.delete(turnId)
+  }
+
+  private async registeredPage(turnId: string, context: BrowserContext): Promise<Page | undefined> {
     const existingTarget = this.targets.get(turnId)
-    if (existingTarget) {
+    if (!existingTarget) return
+    for (const page of context.pages()) {
+      if (!page.isClosed() && await this.probeTargetId(context, page) === existingTarget) return page
+    }
+  }
+
+  /** 'visible' | 'hidden' for a responsive tab; undefined when the tab never answers. */
+  private probeVisibility(page: Page): Promise<'visible' | 'hidden' | undefined> {
+    return bounded(page.evaluate(() => document.visibilityState === 'visible' ? 'visible' as const : 'hidden' as const), PROBE_MS, undefined)
+  }
+
+  private async pageForTurn(turnId: string, newTab = false): Promise<SessionPage> {
+    const desktop = await this.desktop()
+    if (!desktop) return { page: await (await this.getLocalContext()).newPage(), mode: 'local', created: true }
+    const { context } = await this.getCdpContext(desktop.cdpUrl)
+    if (!newTab) {
+      const registered = await this.registeredPage(turnId, context)
+      if (registered) return { page: registered, mode: 'cdp', created: false, reAdopted: true }
+
+      const ownedTargets = new Set([...this.targets]
+        .filter(([sessionId]) => sessionId !== turnId && this.sessions.has(sessionId))
+        .map(([, target]) => target))
+      let fallback: Page | undefined
       for (const page of context.pages()) {
-        if (!page.isClosed() && await this.targetId(context, page).catch(() => null) === existingTarget) return page
+        if (page.isClosed()) continue
+        const target = await this.probeTargetId(context, page)
+        if (!target || ownedTargets.has(target)) continue
+        const visibility = await this.probeVisibility(page)
+        if (!visibility) continue
+        fallback = page
+        if (visibility === 'visible') {
+          this.targets.set(turnId, target)
+          return { page, mode: 'cdp', created: false }
+        }
+      }
+      if (fallback) {
+        await this.register(turnId, context, fallback)
+        return { page: fallback, mode: 'cdp', created: false }
       }
     }
     const page = await context.newPage()
-    const target = await this.targetId(context, page)
-    if (target) this.targets.set(turnId, target)
-    return page
+    await this.register(turnId, context, page)
+    return { page, mode: 'cdp', created: true }
+  }
+
+  private async recoverRegisteredPage(turnId: string): Promise<Page | undefined> {
+    const desktop = await this.desktop()
+    if (!desktop) return
+    const { context } = await this.getCdpContext(desktop.cdpUrl)
+    return this.registeredPage(turnId, context)
   }
 
   session(turnId: string, recorder: TurnEventRecorder, signal?: AbortSignal): BrowserSession {
     let session = this.sessions.get(turnId)
     if (!session) {
-      session = new BrowserSession(turnId, () => this.pageForTurn(turnId), this.displayGate, new ScreenRecorder(this.dataDir, turnId, recorder), recorder, signal)
+      session = new BrowserSession(turnId, (newTab) => this.pageForTurn(turnId, newTab), () => this.recoverRegisteredPage(turnId), this.displayGate, new ScreenRecorder(this.dataDir, turnId, recorder), recorder, signal)
       this.sessions.set(turnId, session)
     } else session.bind(recorder, signal)
     return session
@@ -128,9 +193,10 @@ export class BrowserService {
 
   async finish(turnId: string): Promise<void> {
     const session = this.sessions.get(turnId)
-    this.sessions.delete(turnId)
-    await session?.close(this.targets.has(turnId))
-    this.targets.delete(turnId)
+    try { await session?.close() } finally {
+      this.sessions.delete(turnId)
+      this.targets.delete(turnId)
+    }
   }
 
   private async disconnect(browser: Browser): Promise<void> {
@@ -160,6 +226,10 @@ export class BrowserService {
 
 export class BrowserSession {
   private page?: Promise<Page>
+  private currentPage?: Page
+  private mode?: SessionPage['mode']
+  private created = false
+  private lastUrl?: string
   private tail: Promise<unknown> = Promise.resolve()
   private lastShot = 0
   private closed = false
@@ -167,7 +237,8 @@ export class BrowserSession {
 
   constructor(
     private readonly turnId: string,
-    private readonly newPage: () => Promise<Page>,
+    private readonly newPage: (newTab?: boolean) => Promise<SessionPage>,
+    private readonly recoverPage: () => Promise<Page | undefined>,
     readonly displayGate: DisplayGate,
     readonly screenRecorder: ScreenRecorder,
     private recorder: TurnEventRecorder,
@@ -182,12 +253,12 @@ export class BrowserSession {
     signal?.addEventListener('abort', this.abort, { once: true })
   }
 
-  run<T>(operation: () => Promise<T>): Promise<T> {
+  run<T>(operation: () => Promise<T>, newTab = false): Promise<T> {
     const result = this.tail.then(async () => {
       const gated = await this.displayGate.run(this.recorder, this.signal, async ({ resumed }) => {
-      const page = await this.getPage()
-      await page.bringToFront()
-      if (resumed) await this.screenshot(true, true)
+        const page = await this.getPage(newTab)
+        await page.bringToFront()
+        if (resumed) await this.screenshot(true, true)
         return operation()
       })
       return typeof gated.value === 'string' && gated.controlChanged
@@ -198,20 +269,33 @@ export class BrowserSession {
     return result
   }
 
-  async getPage(): Promise<Page> {
+  async getPage(newTab = false): Promise<Page> {
     if (this.closed || this.signal?.aborted) throw new Error('Browser turn was stopped')
     if (this.page) {
       const page = await this.page.catch(() => undefined)
-      if (page && !page.isClosed()) return page
+      if (page && !page.isClosed() && (!newTab || this.mode === 'local')) return page
       this.page = undefined
+      this.currentPage = undefined
     }
-    const page = this.newPage()
+    const page = this.newPage(newTab && this.mode !== 'local').then((selection) => {
+      if (this.page === page) {
+        this.currentPage = selection.page
+        this.mode = selection.mode
+        if (!selection.reAdopted) this.created = selection.created
+        this.lastUrl = selection.page.url()
+      }
+      return selection.page
+    })
     this.page = page
     void page.catch(() => { if (this.page === page) this.page = undefined })
     return page
   }
 
-  disconnected() { this.page = undefined }
+  disconnected() {
+    if (this.currentPage) this.lastUrl = this.currentPage.url()
+    this.page = undefined
+    this.currentPage = undefined
+  }
 
   async snapshot(): Promise<string> {
     return Buffer.from(await (await this.getPage()).ariaSnapshot({ mode: 'ai' })).subarray(0, 12 * 1024).toString()
@@ -229,15 +313,24 @@ export class BrowserSession {
     this.closed = true
     this.signal?.removeEventListener('abort', this.abort)
     this.page = undefined
+    this.currentPage = undefined
   }
 
-  async close(recoverDisconnectedPage = false) {
+  async close() {
     this.signal?.removeEventListener('abort', this.abort)
     const page = this.page
-      ? await this.page.catch(() => undefined)
-      : recoverDisconnectedPage ? await this.newPage().catch(() => undefined) : undefined
+      ? await bounded(this.page, CLOSE_WAIT_MS, undefined)
+      : this.currentPage
+    const mode = this.mode
+    const created = this.created
+    const lastUrl = page?.url() ?? this.lastUrl
     this.closed = true
-    await page?.close().catch(() => undefined)
+    if (mode === 'local') await page?.close().catch(() => undefined)
+    if (mode === 'cdp' && created && lastUrl === 'about:blank') {
+      const blank = page && !page.isClosed() ? page : await this.recoverPage().catch(() => undefined)
+      if (blank?.url() === 'about:blank') await blank.close().catch(() => undefined)
+    }
     this.page = undefined
+    this.currentPage = undefined
   }
 }

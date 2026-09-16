@@ -1,0 +1,72 @@
+---
+import { selfHost } from '../content/landing'
+import Button from './Button.astro'
+import Container from './Container.astro'
+import Eyebrow from './Eyebrow.astro'
+
+const commands = selfHost.commands.join('\n')
+---
+
+<section class="self-host" data-theme="dark" aria-labelledby="self-host">
+  <Container>
+    <div class="copy">
+      <Eyebrow index={selfHost.index}>{selfHost.eyebrow}</Eyebrow>
+      <h2 id="self-host">{selfHost.title}<a class="anchor" href="#self-host" aria-label="Link to this section">#</a></h2>
+      <p>{selfHost.body}</p>
+    </div>
+    <div class="terminal">
+      <div class="terminal-bar">
+        <span class="traffic" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span>openstaff — zsh</span>
+        <button type="button" data-copy={commands} hidden aria-live="polite">Copy</button>
+      </div>
+      <pre><code>{selfHost.commands.map((command) => (
+        <span class="command"><span class="prompt" aria-hidden="true">{'$ '}</span>{command}</span>
+      ))}</code></pre>
+    </div>
+    <div class="deploys">
+      {selfHost.deploys.map((deploy) => <Button href={deploy.href} variant="secondary" external>{deploy.label}<span aria-hidden="true">↗</span></Button>)}
+    </div>
+  </Container>
+</section>
+
+<script>
+  const button = document.querySelector<HTMLButtonElement>('[data-copy]')
+  if (button && navigator.clipboard?.writeText) {
+    button.hidden = false
+    button.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(button.dataset['copy'] ?? '')
+        button.textContent = 'Copied'
+        button.disabled = true
+        window.setTimeout(() => {
+          button.textContent = 'Copy'
+          button.disabled = false
+        }, 1500)
+      } catch {
+        button.textContent = 'Try again'
+      }
+    })
+  }
+</script>
+
+<style>
+  .self-host { padding-block: 4rem; background: var(--color-app); color: var(--color-fg); }
+  .copy { max-width: 42rem; }
+  h2 { margin: 0.875rem 0 0; color: var(--color-fg); font-size: 1.75rem; font-weight: 600; letter-spacing: -0.02em; line-height: 1.15; text-wrap: balance; }
+  p { margin: 1.25rem 0 0; color: var(--color-fg-muted); }
+  .terminal { max-width: 48rem; margin-top: 2rem; overflow: hidden; border: 1px solid var(--color-line-strong); border-radius: var(--radius-lg); background: var(--color-surface-2); }
+  .terminal-bar { display: flex; min-height: 3rem; align-items: center; gap: 0.875rem; padding: 0.5rem 1rem; border-bottom: 1px solid var(--color-line); color: var(--color-fg-muted); font-size: 0.8125rem; }
+  .traffic { display: flex; gap: 0.35rem; }
+  .traffic i { width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--color-fg-subtle); }
+  .prompt { color: var(--color-fg-subtle); user-select: none; }
+  .command { display: block; }
+  button { min-height: 2rem; min-width: 4.75rem; margin-left: auto; padding-inline: 0.75rem; border: 1px solid var(--color-line-strong); border-radius: var(--radius-sm); background: var(--color-surface); color: var(--color-fg); font: 500 0.75rem Inter, sans-serif; cursor: pointer; transition: background-color 150ms var(--ease-out); }
+  button:disabled { cursor: default; }
+  pre { margin: 0; padding: 1.25rem; overflow-x: auto; color: var(--color-fg); font: 0.8125rem/1.8 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+  .deploys { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1.5rem; }
+  @media (hover: hover) and (pointer: fine) { button:hover { background: var(--color-surface-3); } }
+  @media (min-width: 64rem) { .self-host { padding-block: 6rem; } h2 { font-size: 2.25rem; } }
+  @media (max-width: 35rem) { .deploys,
+    .deploys :global(.button) { width: 100%; } }
+</style>

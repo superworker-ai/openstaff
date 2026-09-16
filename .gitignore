@@ -3,6 +3,7 @@ data/
 .env
 dist/
 .output/
+.astro/
 .tanstack/
 routeTree.gen.ts
 coverage/

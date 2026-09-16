@@ -1,0 +1,576 @@
+---
+import BotFace from '../BotFace.astro'
+import BrandMark from '../BrandMark.astro'
+import { bots } from '../../content/landing'
+const [ops, support] = bots
+---
+
+<div
+  class="browser-frame"
+  role="img"
+  aria-label={`OpenStaff room with ${ops.name} and ${support.name} working in chat while ${ops.name}'s live computer is visible`}
+>
+  <div class="browser-bar" aria-hidden="true">
+    <div class="traffic"><i></i><i></i><i></i></div>
+    <div class="address">app.myopenstaff.com</div>
+    <div class="bar-spacer"></div>
+  </div>
+  <div class="app" data-mock="dark" aria-hidden="true">
+    <div class="rail">
+      <div class="rail-mark"><BrandMark size={24} /></div>
+      <div class="rail-bots">
+        {bots.map((bot, index) => (
+          <div class="rail-avatar" title={bot.fullName}>
+            <BotFace {...bot.avatar} size={28} />
+            {index === 0 && <span class="online"></span>}
+          </div>
+        ))}
+        <div class="rail-more">+{bots.length - 5}</div>
+      </div>
+      <div class="rail-add">+</div>
+    </div>
+
+    <div class="roster">
+      <div class="roster-head"><span>OpenStaff</span><b>+</b></div>
+      <div class="roster-label">Teammates</div>
+      {bots.map((bot, index) => (
+        <div class:list={['person', { active: index === 0 }]}>
+          <div class="person-avatar" title={bot.fullName}><BotFace {...bot.avatar} /></div>
+          <div><strong>{bot.name} · {bot.role}</strong><span>{bot.lastLine}</span></div>
+          <time>{bot.time}</time>
+        </div>
+      ))}
+    </div>
+
+    <div class="chat">
+      <div class="chat-head">
+        <div><strong>#launch</strong><span>3 people · {bots.length} teammates</span></div>
+        <div class="head-dots">•••</div>
+      </div>
+      <div class="messages">
+        <div class="message human">
+          <span class="message-name">You · 9:39</span>
+          <p>{ops.name}, sync today's launch work and pull {support.name} in on support.</p>
+        </div>
+        <div class="message bot">
+          <span class="message-name">{ops.name} · 9:40</span>
+          <p>On it. I’m updating the plan now.</p>
+          <div class="steps">
+            <span><i>✓</i> Opened Linear</span>
+            <span><i>✓</i> Updated 3 issues</span>
+            <span><i>✓</i> Drafted summary</span>
+          </div>
+        </div>
+        <div class="message human compact">
+          <span class="message-name">You · 9:41</span>
+          <p>Perfect. Flag anything that needs me.</p>
+        </div>
+        <div class="message bot compact">
+          <span class="message-name">{support.name} · 9:42</span>
+          <p>I'll add the support trends to {ops.name}'s recap.</p>
+        </div>
+      </div>
+      <div class="composer"><span>Message #launch</span><b>↑</b></div>
+    </div>
+
+    <div class="computer">
+      <div class="computer-head">
+        <div><strong>{ops.name}’s computer</strong><span>Live desktop</span></div>
+        <span class="live-status"><i></i> Live</span>
+      </div>
+      <div class="desktop">
+        <div class="menu-bar"><span>{ops.name}</span><span>9:41</span></div>
+        <div class="fake-browser">
+          <div class="fake-browser-head">
+            <div class="mini-dots">● ● ●</div>
+            <div class="fake-url">app.intercom.com/inbox</div>
+          </div>
+          <div class="inbox">
+            <div class="inbox-side">
+              <span></span><span></span><span></span><span></span>
+            </div>
+            <div class="inbox-list">
+              <div><i></i><span></span></div>
+              <div><i></i><span></span></div>
+              <div><i></i><span></span></div>
+              <div><i></i><span></span></div>
+            </div>
+            <div class="inbox-main"><b></b><span></span><span></span><span></span><em></em></div>
+          </div>
+        </div>
+        <div class="control-pill"><span><i></i> Live · {ops.name} in control</span><span class="takeover">Take over</span></div>
+        <div class="dock">
+          <div><i class="chrome-glyph"></i><span>Chrome</span></div>
+          <div><i class="files-glyph"></i><span>Files</span></div>
+          <div><i class="terminal-glyph">›_</i><span>Terminal</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .browser-frame {
+    overflow: hidden;
+    border: 1px solid var(--color-line-strong);
+    border-radius: var(--radius-xl);
+    background: var(--color-surface);
+    box-shadow:
+      0 32px 80px rgb(42 28 0 / 0.12),
+      0 4px 14px rgb(42 28 0 / 0.06);
+  }
+
+  .browser-bar {
+    display: grid;
+    height: 2.75rem;
+    align-items: center;
+    grid-template-columns: 1fr minmax(8rem, 19rem) 1fr;
+    padding-inline: 1rem;
+    border-bottom: 1px solid var(--color-line);
+    background: var(--color-surface-3);
+  }
+
+  .traffic {
+    display: flex;
+    gap: 0.375rem;
+  }
+
+  .traffic i {
+    width: 0.625rem;
+    height: 0.625rem;
+    border-radius: 999px;
+    background: #d4d2ce;
+  }
+
+  .traffic i:nth-child(1) { background: #ff6b61; }
+  .traffic i:nth-child(2) { background: #f5bf4f; }
+  .traffic i:nth-child(3) { background: #62c554; }
+
+  .address {
+    overflow: hidden;
+    padding: 0.3125rem 0.75rem;
+    border: 1px solid var(--color-line);
+    border-radius: 0.4375rem;
+    background: var(--color-surface);
+    color: var(--color-fg-subtle);
+    font-size: 0.6875rem;
+    line-height: 1;
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .app {
+    display: grid;
+    aspect-ratio: 16 / 10;
+    overflow: hidden;
+    grid-template-columns: 4rem 16.25rem minmax(18rem, 1fr) minmax(21rem, 1fr);
+    background: var(--color-app);
+    color: var(--color-fg);
+    font-size: 0.75rem;
+    line-height: 1.35;
+  }
+
+  .rail,
+  .roster,
+  .chat,
+  .computer {
+    min-width: 0;
+    min-height: 0;
+  }
+
+  .rail {
+    display: flex;
+    align-items: center;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 0.75rem 0.5rem;
+    border-right: 1px solid var(--color-line);
+    background: var(--color-app);
+  }
+
+  .rail-mark {
+    display: grid;
+    width: 2rem;
+    height: 2rem;
+    place-items: center;
+    border-radius: 0.625rem;
+    background: var(--color-fg);
+    color: var(--color-app);
+    font-weight: 700;
+  }
+
+  .rail-bots {
+    display: flex;
+    align-items: center;
+    flex-direction: column;
+    gap: 0.625rem;
+    padding-top: 0.25rem;
+  }
+
+  .rail-avatar,
+  .person-avatar {
+    position: relative;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    color: #fff;
+    font-size: 0.625rem;
+    font-weight: 700;
+  }
+
+  .rail-avatar { width: 1.75rem; height: 1.75rem; flex: none; }
+  .rail-more { display: none; }
+  .person-avatar { width: 2.125rem; height: 2.125rem; }
+
+  .online {
+    position: absolute;
+    right: -1px;
+    bottom: -1px;
+    width: 0.5rem;
+    height: 0.5rem;
+    border: 2px solid var(--color-app);
+    border-radius: 50%;
+    background: var(--color-ok);
+  }
+
+  .rail-add {
+    display: grid;
+    width: 2rem;
+    height: 2rem;
+    margin-top: auto;
+    place-items: center;
+    border: 1px solid var(--color-line);
+    border-radius: 50%;
+    color: var(--color-fg-muted);
+    font-size: 1rem;
+  }
+
+  .roster {
+    padding: 0.875rem 0.75rem;
+    border-right: 1px solid var(--color-line);
+    background: var(--color-surface);
+  }
+
+  .roster-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.125rem 0.375rem 1rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+  }
+
+  .roster-head b { color: var(--color-fg-muted); font-size: 1rem; }
+
+  .roster-label {
+    padding: 0 0.375rem 0.5rem;
+    color: var(--color-fg-subtle);
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .person {
+    display: grid;
+    align-items: center;
+    gap: 0.625rem;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    padding: 0.5rem;
+    border-radius: 0.625rem;
+  }
+
+  .person.active { background: var(--color-surface-3); }
+  .person div:nth-child(2) { min-width: 0; }
+  .person strong,
+  .person span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .person strong { font-size: 0.6875rem; font-weight: 600; }
+  .person span,
+  .person time { color: var(--color-fg-muted); font-size: 0.625rem; }
+
+  .chat {
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--color-line);
+    background: var(--color-surface);
+  }
+
+  .chat-head,
+  .computer-head {
+    display: flex;
+    height: 3.5rem;
+    flex: none;
+    align-items: center;
+    justify-content: space-between;
+    padding-inline: 1rem;
+    border-bottom: 1px solid var(--color-line);
+  }
+
+  .chat-head strong,
+  .chat-head span,
+  .computer-head strong,
+  .computer-head span { display: block; }
+  .chat-head strong,
+  .computer-head strong { font-size: 0.75rem; font-weight: 600; }
+  .chat-head span,
+  .computer-head div span { color: var(--color-fg-muted); font-size: 0.625rem; }
+  .head-dots { color: var(--color-fg-muted); letter-spacing: 0.12em; }
+
+  .messages {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
+    gap: 0.625rem;
+    padding: 0.875rem 1rem;
+    overflow: hidden;
+  }
+
+  .message { max-width: 92%; }
+  .message.human { align-self: flex-end; }
+  .message-name {
+    display: block;
+    margin-bottom: 0.25rem;
+    color: var(--color-fg-muted);
+    font-size: 0.625rem;
+  }
+  .human .message-name { text-align: right; }
+  .message p {
+    margin: 0;
+    padding: 0.5rem 0.625rem;
+    border-radius: 0.75rem 0.75rem 0.75rem 0.25rem;
+    background: var(--color-surface-3);
+    color: var(--color-fg);
+    font-size: 0.6875rem;
+  }
+  .message.human p {
+    border-radius: 0.75rem 0.75rem 0.25rem 0.75rem;
+    background: var(--color-accent);
+    color: var(--color-accent-fg);
+  }
+
+  .steps {
+    display: grid;
+    gap: 0.25rem;
+    margin-top: 0.375rem;
+    padding: 0.5rem 0.625rem;
+    border: 1px solid var(--color-line);
+    border-radius: 0.625rem;
+    background: var(--color-surface-2);
+    color: var(--color-fg-muted);
+    font-size: 0.625rem;
+  }
+  .steps i { color: var(--color-ok); font-style: normal; }
+  .compact { margin-top: 0.125rem; }
+
+  .composer {
+    display: flex;
+    min-height: 2.625rem;
+    flex: none;
+    align-items: center;
+    justify-content: space-between;
+    margin: 0 0.75rem 0.75rem;
+    padding-inline: 0.75rem;
+    border: 1px solid var(--color-line-strong);
+    border-radius: 0.625rem;
+    background: var(--color-surface-2);
+    color: var(--color-fg-subtle);
+    font-size: 0.6875rem;
+  }
+  .composer b {
+    display: grid;
+    width: 1.375rem;
+    height: 1.375rem;
+    place-items: center;
+    border-radius: 0.375rem;
+    background: var(--color-accent);
+    color: white;
+  }
+
+  .computer {
+    display: flex;
+    flex-direction: column;
+    background: var(--color-app);
+  }
+
+  .computer-head { background: var(--color-surface); }
+  .live-status { color: var(--color-fg-muted); font-size: 0.625rem; }
+  .live-status i,
+  .control-pill i {
+    display: inline-block;
+    width: 0.375rem;
+    height: 0.375rem;
+    margin-right: 0.25rem;
+    border-radius: 50%;
+    background: var(--color-ok);
+  }
+
+  .desktop {
+    position: relative;
+    min-height: 0;
+    flex: 1;
+    overflow: hidden;
+    background-color: var(--color-app);
+    background-image: linear-gradient(rgb(13 13 15 / .25), rgb(13 13 15 / .55)), radial-gradient(circle at 55% 35%, rgb(29 42 68 / .25), rgb(13 13 15 / .1)), image-set(url('/wallpaper/computer-wallpaper-dark.webp') 1x);
+    background-position: center;
+    background-size: cover;
+  }
+
+  .menu-bar {
+    display: flex;
+    height: 1.5rem;
+    align-items: center;
+    justify-content: space-between;
+    padding-inline: 0.625rem;
+    background: var(--color-glass);
+    color: var(--color-fg-muted);
+    font-size: 0.5625rem;
+    backdrop-filter: blur(10px);
+  }
+
+  .fake-browser {
+    position: absolute;
+    top: 2.375rem;
+    right: 1.25rem;
+    bottom: 4.75rem;
+    left: 1.25rem;
+    overflow: hidden;
+    border: 1px solid var(--color-glass-line);
+    border-radius: 0.625rem;
+    background: var(--color-surface-2);
+    box-shadow: 0 20px 40px rgb(0 0 0 / 0.35);
+  }
+
+  .fake-browser-head {
+    display: grid;
+    height: 1.625rem;
+    align-items: center;
+    grid-template-columns: 1fr 3fr 1fr;
+    padding-inline: 0.5rem;
+    border-bottom: 1px solid var(--color-line);
+    background: var(--color-surface-3);
+  }
+  .mini-dots { color: var(--color-fg-subtle); font-size: 0.375rem; letter-spacing: 0.1em; }
+  .fake-url {
+    overflow: hidden;
+    padding: 0.2rem 0.4rem;
+    border-radius: 0.25rem;
+    background: var(--color-surface);
+    color: var(--color-fg-muted);
+    font-size: 0.5rem;
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .inbox {
+    display: grid;
+    height: calc(100% - 1.625rem);
+    grid-template-columns: 15% 36% 1fr;
+  }
+  .inbox-side,
+  .inbox-list { border-right: 1px solid var(--color-line); }
+  .inbox-side { display: grid; align-content: start; gap: 0.45rem; padding: 0.75rem 0.4rem; }
+  .inbox-side span { height: 0.25rem; border-radius: 1rem; background: var(--color-surface-4); }
+  .inbox-side span:nth-child(3) { width: 70%; }
+  .inbox-list { display: grid; align-content: start; }
+  .inbox-list div { display: grid; align-items: center; gap: 0.4rem; grid-template-columns: 0.75rem 1fr; padding: 0.5rem; border-bottom: 1px solid var(--color-line); }
+  .inbox-list i { width: 0.75rem; height: 0.75rem; border-radius: 50%; background: var(--color-surface-4); }
+  .inbox-list span { height: 0.25rem; border-radius: 1rem; background: var(--color-surface-4); }
+  .inbox-main { display: grid; align-content: start; gap: 0.55rem; padding: 0.75rem; }
+  .inbox-main b { width: 48%; height: 0.35rem; border-radius: 1rem; background: var(--color-fg-muted); }
+  .inbox-main span { height: 0.25rem; border-radius: 1rem; background: var(--color-surface-4); }
+  .inbox-main span:nth-child(3) { width: 85%; }
+  .inbox-main span:nth-child(4) { width: 65%; }
+  .inbox-main em { height: 2rem; margin-top: 0.35rem; border-radius: 0.35rem; background: var(--color-surface-3); }
+
+  .control-pill {
+    position: absolute;
+    right: 0.75rem;
+    bottom: 0.75rem;
+    left: 0.75rem;
+    display: flex;
+    min-height: 2.375rem;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.375rem 0.375rem 0.375rem 0.75rem;
+    border: 1px solid var(--color-glass-line);
+    border-radius: 0.625rem;
+    background: var(--color-glass);
+    color: var(--color-fg);
+    font-size: 0.625rem;
+    backdrop-filter: blur(12px);
+  }
+  .control-pill .takeover {
+    display: grid;
+    min-height: 1.625rem;
+    place-items: center;
+    padding-inline: 0.625rem;
+    border: 1px solid var(--color-line-strong);
+    border-radius: 0.375rem;
+    background: var(--color-surface-3);
+    color: var(--color-fg);
+    font: inherit;
+  }
+
+  .dock {
+    position: absolute;
+    bottom: 3.75rem;
+    left: 50%;
+    display: flex;
+    gap: 0.25rem;
+    padding: 0.3rem 0.4rem;
+    border: 1px solid var(--color-glass-line);
+    border-radius: 0.625rem;
+    background: var(--color-glass);
+    transform: translateX(-50%);
+    backdrop-filter: blur(10px);
+  }
+  .dock div { display: grid; width: 2rem; justify-items: center; gap: 0.15rem; }
+  .dock i { display: grid; width: 1.1rem; height: 1.1rem; place-items: center; border-radius: 0.3rem; font-style: normal; }
+  .dock span { color: var(--color-fg-muted); font-size: 0.4rem; }
+  .chrome-glyph { border-radius: 50% !important; background: conic-gradient(#f0616d 0 33%, #f5a524 0 66%, #3ecf8e 0); }
+  .files-glyph { background: #5b8def; }
+  .terminal-glyph { background: var(--color-surface-4); color: var(--color-fg); font-size: 0.45rem; }
+
+  @media (max-width: 63.999rem) {
+    .app { grid-template-columns: 4rem minmax(18rem, 1fr) minmax(20rem, 42%); }
+    .roster { display: none; }
+  }
+
+  @media (max-width: 47.999rem) {
+    .browser-frame { border-radius: var(--radius-lg); }
+    .browser-bar { height: 2.25rem; grid-template-columns: 1fr minmax(7rem, 11rem) 1fr; padding-inline: 0.75rem; }
+    .traffic { gap: 0.25rem; }
+    .traffic i { width: 0.45rem; height: 0.45rem; }
+    .address { font-size: 0.5625rem; }
+    .app { aspect-ratio: 16 / 10; grid-template-columns: 2.625rem minmax(0, 1fr); }
+    .computer { display: none; }
+    .rail { gap: 0.375rem; padding: 0.375rem 0.3rem; }
+    .rail-mark { width: 1.25rem; height: 1.25rem; flex: none; font-size: 0.5rem; }
+    .rail-avatar { width: 1.375rem; height: 1.375rem; }
+    .rail-avatar:nth-child(n + 6),
+    .rail-add { display: none; }
+    .rail-bots { gap: 0.1875rem; padding-top: 0; }
+    .rail-more { display: grid; width: 1.375rem; height: 1.125rem; place-items: center; border-radius: 999px; background: var(--color-surface-3); color: var(--color-fg-muted); font-size: 0.5rem; }
+    .online { width: 0.4rem; height: 0.4rem; }
+    .chat { border-right: 0; }
+    .chat-head { height: 2.5rem; padding-inline: 0.65rem; }
+    .chat-head strong { font-size: 0.625rem; }
+    .chat-head span { display: none; }
+    .messages { gap: 0.35rem; padding: 0.5rem 0.625rem; }
+    .message { max-width: 88%; }
+    .message-name { margin-bottom: 0.12rem; font-size: 0.45rem; }
+    .message p { padding: 0.3rem 0.45rem; font-size: 0.5rem; line-height: 1.25; }
+    .steps { gap: 0.1rem; margin-top: 0.2rem; padding: 0.3rem 0.45rem; font-size: 0.45rem; }
+    .compact { display: none; }
+    .composer { min-height: 1.75rem; margin: 0 0.45rem 0.4rem; padding-inline: 0.5rem; font-size: 0.5rem; }
+    .composer b { width: 1rem; height: 1rem; }
+  }
+  @media (max-width: 47.999rem) {
+    .desktop {
+      background-image: linear-gradient(rgb(13 13 15 / .25), rgb(13 13 15 / .55)), radial-gradient(circle at 55% 35%, rgb(29 42 68 / .25), rgb(13 13 15 / .1)), image-set(url('/wallpaper/computer-wallpaper-dark-sm.webp') 1x, url('/wallpaper/computer-wallpaper-dark.webp') 2x);
+    }
+  }
+</style>

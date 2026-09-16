@@ -1,0 +1,286 @@
+---
+import { APP_URL, GITHUB_URL } from '../config'
+import Button from './Button.astro'
+import Container from './Container.astro'
+import ThemeToggle from './ThemeToggle.astro'
+import BrandMark from './BrandMark.astro'
+
+const links = [
+  { label: 'Product', href: '#product' },
+  { label: 'How it works', href: '#computer' },
+  { label: 'Self-host', href: '#self-host' },
+]
+---
+
+<nav class:list={['site-nav', { 'on-hero': Astro.url.pathname === '/' }]} data-site-nav aria-label="Main navigation">
+  <Container class="nav-container">
+    <a class="wordmark" href="/" aria-label="OpenStaff home">
+      <span class="mark"><BrandMark /></span>
+      <span>OpenStaff</span>
+    </a>
+
+    <div class="nav-links">
+      {links.map((link) => <a href={link.href}>{link.label}</a>)}
+      <a href={GITHUB_URL} target="_blank" rel="noopener">GitHub</a>
+    </div>
+
+    <div class="nav-actions">
+      <Button href={APP_URL} variant="secondary">Log in</Button>
+      <Button href={APP_URL}>Get started</Button>
+    </div>
+
+    <div class="nav-theme"><ThemeToggle /></div>
+
+    <details class="mobile-menu">
+      <summary aria-label="Menu">
+        <span class="sr-only">Menu</span>
+        <svg aria-hidden="true" viewBox="0 0 24 24" width="24" height="24" fill="none">
+          <path d="M5 8h14M5 16h14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+        </svg>
+      </summary>
+      <div class="mobile-panel">
+        {links.map((link) => <a href={link.href}>{link.label}</a>)}
+        <a href={GITHUB_URL} target="_blank" rel="noopener">GitHub</a>
+        <div class="mobile-actions">
+          <Button href={APP_URL} variant="secondary">Log in</Button>
+          <Button href={APP_URL}>Get started</Button>
+        </div>
+      </div>
+    </details>
+  </Container>
+</nav>
+
+<script>
+  const nav = document.querySelector<HTMLElement>('[data-site-nav]')
+  const menu = nav?.querySelector<HTMLDetailsElement>('.mobile-menu')
+  const menuTrigger = menu?.querySelector<HTMLElement>('summary')
+  const syncBorder = () => {
+    nav?.classList.toggle('is-scrolled', window.scrollY > 8)
+  }
+
+  const closeMenu = (restoreFocus = false) => {
+    if (!menu?.open) return
+    menu.open = false
+    if (restoreFocus) menuTrigger?.focus()
+  }
+
+  syncBorder()
+  window.addEventListener('scroll', syncBorder, { passive: true })
+
+  menuTrigger?.setAttribute('aria-expanded', String(menu?.open ?? false))
+  menu?.addEventListener('toggle', () => {
+    menuTrigger?.setAttribute('aria-expanded', String(menu.open))
+  })
+  menu?.querySelectorAll('a').forEach((link) => {
+    link.addEventListener('click', () => {
+      if (link.target === '_blank') {
+        closeMenu(true)
+        return
+      }
+      closeMenu()
+      const destination = new URL(link.href)
+      if (destination.origin !== location.origin || destination.pathname !== location.pathname || !destination.hash) return
+      requestAnimationFrame(() => {
+        const target = document.getElementById(decodeURIComponent(destination.hash.slice(1)))
+        if (!target) return
+        const addedTabIndex = !target.hasAttribute('tabindex')
+        if (addedTabIndex) target.tabIndex = -1
+        target.focus({ preventScroll: true })
+        if (addedTabIndex) target.addEventListener('blur', () => target.removeAttribute('tabindex'), { once: true })
+      })
+    })
+  })
+  document.addEventListener('pointerdown', (event) => {
+    if (event.target instanceof Node && !menu?.contains(event.target)) closeMenu()
+  })
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closeMenu(true)
+  })
+  window.matchMedia('(min-width: 68rem)').addEventListener('change', (event) => {
+    if (!event.matches || !menu?.open) return
+    const focusedLink = menu.querySelector<HTMLAnchorElement>('a:focus')
+    const focusedHref = focusedLink?.getAttribute('href')
+    const focusWasInMenu = menu.contains(document.activeElement)
+    closeMenu()
+    if (!focusWasInMenu) return
+    const desktopLink = Array.from(nav?.querySelectorAll<HTMLAnchorElement>('.nav-links a') ?? [])
+      .find((link) => link.getAttribute('href') === focusedHref)
+    const focusTarget = desktopLink ?? nav?.querySelector<HTMLElement>('.wordmark')
+    focusTarget?.focus()
+  })
+</script>
+
+<style>
+  .site-nav {
+    border-bottom: 1px solid transparent;
+    background: color-mix(in srgb, var(--color-surface) 94%, transparent);
+    backdrop-filter: blur(14px);
+  }
+
+  .site-nav.is-scrolled {
+    border-bottom-color: var(--color-line-strong);
+  }
+
+  .site-nav.on-hero:not(.is-scrolled) {
+    background: transparent;
+    backdrop-filter: none;
+    --color-fg: #fff;
+    --color-fg-muted: rgb(255 255 255 / .85);
+    --color-app: rgb(13 13 15 / .2);
+    --color-surface: rgb(255 255 255 / .1);
+    --color-surface-3: rgb(255 255 255 / .16);
+    --color-line: rgb(255 255 255 / .2);
+    --color-line-strong: rgb(255 255 255 / .3);
+    --theme-active-bg: #fff;
+    --theme-active-fg: #242428;
+  }
+
+  .site-nav.on-hero:not(.is-scrolled) .mobile-panel {
+    --color-surface: #141416;
+    background: var(--color-surface);
+  }
+
+  .site-nav.on-hero:not(.is-scrolled) :global(:focus-visible) {
+    outline-color: #fff;
+  }
+
+  :global(.nav-container) {
+    display: flex;
+    min-height: 4rem;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .wordmark {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 0.625rem;
+    color: var(--color-fg);
+    font-size: 0.9375rem;
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  .mark {
+    display: grid;
+    width: 1.75rem;
+    height: 1.75rem;
+    place-items: center;
+    color: var(--color-fg);
+  }
+
+  .nav-links {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .nav-links a,
+  .mobile-panel > a {
+    color: var(--color-fg-muted);
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: color 150ms var(--ease-out);
+  }
+
+  .nav-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .mobile-menu {
+    display: none;
+  }
+
+  .nav-theme { flex: none; margin-left: auto; }
+
+  .mobile-menu summary {
+    display: grid;
+    width: 2.5rem;
+    height: 2.5rem;
+    cursor: pointer;
+    list-style: none;
+    place-items: center;
+    border: 1px solid var(--color-line-strong);
+    border-radius: var(--radius-md);
+    color: var(--color-fg);
+  }
+
+  .mobile-menu summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .mobile-panel {
+    position: absolute;
+    top: calc(100% + 1px);
+    right: 1.5rem;
+    left: 1.5rem;
+    display: grid;
+    gap: 0.25rem;
+    padding: 0.75rem;
+    border: 1px solid var(--color-line-strong);
+    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+    background: var(--color-surface);
+    box-shadow: 0 18px 45px rgb(42 28 0 / 0.1);
+  }
+
+  .mobile-panel > a {
+    padding: 0.75rem;
+    border-radius: var(--radius-sm);
+  }
+
+  .mobile-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+    padding-top: 0.5rem;
+  }
+
+  .mobile-actions :global(.button) {
+    width: 100%;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .wordmark:hover {
+      color: var(--color-accent);
+    }
+
+    .nav-links a:hover,
+    .mobile-panel > a:hover {
+      color: var(--color-fg);
+    }
+
+    .mobile-panel > a:hover {
+      background: var(--color-surface-3);
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .site-nav {
+      transition: background-color 180ms var(--ease-out), border-color 180ms var(--ease-out);
+    }
+  }
+
+  @media (max-width: 67.999rem) {
+    .nav-links,
+    .nav-actions {
+      display: none;
+    }
+
+    .mobile-menu {
+      display: block;
+    }
+  }
+
+  @media (max-width: 30rem) {
+    :global(.nav-container) { gap: .5rem; padding-inline: .75rem; }
+  }
+
+  @media (max-width: 22.499rem) {
+    .wordmark > span:last-child { display: none; }
+  }
+</style>

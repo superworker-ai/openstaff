@@ -67,6 +67,19 @@ function responseHeaders(headers: Record<string, string | string[] | undefined>,
 
 export function computerDesktopRoutes({ computer, config, lease }: Pick<ApiDependencies, 'computer' | 'config' | 'lease'>): Hono<AppEnv> {
   const app = new Hono<AppEnv>()
+  // Rotate the external stream key and restart the stream. Recovers a stale key (for example when
+  // another server process restarted the stream) without a takeover round-trip. Allowed for any
+  // member while the bot holds control, or for the current human controller.
+  app.post('/session/rotate', async (context) => {
+    context.header('Cache-Control', 'no-store')
+    if (!originAllowed(context.req.header('origin'), { publicAppUrl: config.publicAppUrl, headers: context.req.raw.headers, requestUrl: context.req.url })) return context.json({ error: 'Origin not allowed' }, 403)
+    const desktop = await computer.desktop()
+    if (!desktop) return context.json({ error: 'Computer desktop unavailable' }, 503)
+    if (desktop.kind !== 'external') return context.json({ error: 'proxied-stream' }, 409)
+    const current = await lease.current()
+    if (current.ownerKind === 'human' && current.ownerId !== context.get('user').id) return context.json({ error: 'held' }, 409)
+    try { await desktop.revoke(); return context.json({ ok: true }) } catch { return context.json({ error: 'Computer desktop unavailable' }, 503) }
+  })
   app.get('/session', async (context) => {
     context.header('Cache-Control', 'no-store')
     if (!originAllowed(context.req.header('origin'), { publicAppUrl: config.publicAppUrl, headers: context.req.raw.headers, requestUrl: context.req.url })) return context.json({ error: 'Origin not allowed' }, 403)

@@ -17,6 +17,10 @@ it('protects secrets, installs plugins, and authorizes automation mutations thro
     cookie = signup.response.headers.get('set-cookie')!.split(';')[0]!
     const ownerCookie = cookie
     expect((await request('/api/workspace/provider-keys', 'PUT', { xai: 'canary-key' })).data).toMatchObject({ configured: { xai: true } })
+    const opencode = await request('/api/workspace/provider-keys', 'PUT', { opencode: 'opencode-canary-key' })
+    expect(opencode.response.status).toBe(200)
+    expect(opencode.data).toMatchObject({ configured: { opencode: true } })
+    expect((await request('/api/workspace/provider-keys', 'PUT', { unknown: 'key' })).response.status).toBe(400)
     expect(JSON.stringify((await request('/api/workspace/provider-keys')).data)).not.toContain('canary-key')
     expect(JSON.stringify(await running.database.db.select().from(providerKeys))).not.toContain('canary-key')
     await request('/api/workspace/provider-keys', 'PUT', { xai: '' })

@@ -1,0 +1,33 @@
+---
+import AppMock from '../components/mocks/AppMock.astro'
+import BrandMark from '../components/BrandMark.astro'
+import { hero } from '../content/landing'
+import '../styles/global.css'
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>OpenStaff social preview</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <main class="card">
+      <div class="wordmark"><BrandMark size={36} />OpenStaff</div>
+      <h1>{hero.title}</h1>
+      <p>{hero.body}</p>
+      <div class="product"><AppMock /></div>
+    </main>
+  </body>
+</html>
+<style>
+  .card { position: relative; width: 1200px; height: 630px; overflow: hidden; padding: 44px 52px; background: var(--color-surface); }
+  .wordmark { display: flex; align-items: center; gap: 12px; font-size: 22px; font-weight: 600; }
+  h1 { position: relative; z-index: 1; width: 680px; margin: 40px 0 20px; font-size: 64px; line-height: 1.05; letter-spacing: -0.02em; font-weight: 600; }
+  p { position: relative; z-index: 1; width: 470px; margin: 0; color: var(--color-fg-muted); font-size: 24px; line-height: 1.5; }
+  .product { position: absolute; top: 300px; left: 575px; width: 1056px; transform: scale(.66); transform-origin: top left; }
+</style>

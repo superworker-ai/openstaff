@@ -33,5 +33,6 @@ export function providerError(provider: string, error: unknown, credential = 'AP
   if (status === 401 || status === 403) return new ComputerError('auth', `${provider} rejected the configured ${credential}`)
   if (status === 404) return new ComputerError('permanent', `${provider} computer no longer exists`)
   if (status === 429 || (typeof status === 'number' && status >= 500)) return new ComputerError('transient', `${provider} is temporarily unavailable`)
-  return new ComputerError('unavailable', `${provider} connection failed`)
+  const reason = error instanceof Error ? error.message.split('\n')[0]!.slice(0, 200) : ''
+  return new ComputerError('unavailable', reason ? `${provider} connection failed: ${reason}` : `${provider} connection failed`)
 }

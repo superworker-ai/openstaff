@@ -1,0 +1,66 @@
+---
+import { finalCta, actions } from '../content/landing'
+import Button from './Button.astro'
+import Container from './Container.astro'
+---
+
+<section class="final-cta" aria-labelledby="final-title">
+  <div class="closing-art" aria-hidden="true">
+    <picture>
+      <source media="(min-width: 48rem)" srcset="/illustrations/closing-painted-day-wide.webp" width="2172" height="724" />
+      <img src="/illustrations/closing-painted-day.webp" srcset="/illustrations/closing-painted-day-sm.webp 960w, /illustrations/closing-painted-day.webp 1536w" sizes="100vw" width="1536" height="1024" alt="" loading="lazy" decoding="async" />
+    </picture>
+    <picture class="closing-night">
+      <source media="(min-width: 48rem)" srcset="/illustrations/closing-painted-night-wide.webp" width="2172" height="724" />
+      <img src="/illustrations/closing-painted-night.webp" srcset="/illustrations/closing-painted-night-sm.webp 960w, /illustrations/closing-painted-night.webp 1536w" sizes="100vw" width="1536" height="1024" alt="" loading="lazy" decoding="async" />
+    </picture>
+  </div>
+  <div class="closing-shade" aria-hidden="true"></div>
+  <div class="closing-copy"><Container>
+    <h2 id="final-title">{finalCta.title}<a class="anchor" href="#final-title" aria-label="Link to this section">#</a></h2>
+    <div class="actions">
+      <Button href={actions.primary.href} size="lg">{actions.primary.label}</Button>
+      <Button href={actions.secondary.href} variant="secondary" tone="inverse" size="lg">{actions.secondary.label}</Button>
+    </div>
+  </Container></div>
+</section>
+
+<style>
+  .final-cta {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    width: 100%;
+    min-height: 37.5rem;
+    background: #4ba8d8;
+    color: #fff;
+    text-align: center;
+  }
+  .closing-art { position: absolute; inset: auto 0 0; height: 26.25rem; pointer-events: none; mask-image: linear-gradient(transparent, #000 20%); }
+  .closing-art picture, .closing-art img { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .closing-art img { object-fit: cover; object-position: center bottom; }
+  .closing-night { opacity: 0; }
+  :global(html[data-theme='dark']) .final-cta { background: #b84678; }
+  :global(html[data-theme='dark']) .closing-night { opacity: 1; }
+  @media (prefers-color-scheme: dark) {
+    :global(html:not([data-theme])) .final-cta { background: #b84678; }
+    :global(html:not([data-theme])) .closing-night { opacity: 1; }
+  }
+  .closing-shade { position: absolute; inset: 0; pointer-events: none; background: linear-gradient(rgb(18 22 36 / .65), rgb(18 22 36 / .4) 32%, transparent 65%); }
+  .closing-copy { position: relative; padding-block: 3rem; }
+  h2 { max-width: 17ch; margin: 0 auto; color: #fff; font-size: clamp(2rem, 3.5vw, 3.25rem); font-weight: 600; letter-spacing: -0.025em; line-height: 1.1; text-wrap: balance; }
+  .actions { display: flex; flex-wrap: wrap; justify-content: center; gap: .75rem; margin: 1.5rem auto 0; }
+  @media (prefers-reduced-motion: no-preference) {
+    :global(html.theme-transition) .closing-night { transition: opacity 600ms cubic-bezier(.22, 1, .36, 1); }
+    :global(html.theme-transition) .final-cta { transition: background-color 600ms cubic-bezier(.22, 1, .36, 1); }
+  }
+  @media (min-width: 48rem) {
+    .final-cta { min-height: 35rem; aspect-ratio: 2.7; }
+    .closing-art { inset: 0; height: 100%; mask-image: none; }
+    .closing-copy { padding-top: clamp(3rem, 4vw, 6rem); }
+  }
+  @media (max-width: 30rem) {
+    .actions { max-width: 20rem; }
+    .actions :global(.button) { width: 100%; }
+  }
+</style>

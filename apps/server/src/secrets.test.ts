@@ -8,6 +8,7 @@ it('authenticates encrypted values, persists keys, and falls back to environment
   const f = await fixture()
   try {
     vi.stubEnv('XAI_API_KEY', 'environment-value')
+    vi.stubEnv('OPENCODE_API_KEY', 'opencode-environment-value')
     const secrets = await Secrets.open(f.directory)
     const encrypted = secrets.encrypt('canary-provider-secret')
     expect(encrypted).not.toContain('canary-provider-secret')
@@ -18,6 +19,8 @@ it('authenticates encrypted values, persists keys, and falls back to environment
     expect(() => secrets.decrypt(contextual, 'computer:daytona')).toThrow()
     expect(() => new Secrets(randomBytes(32)).decrypt(encrypted)).toThrow()
     const keys = new KeyStore(f.db, secrets)
+    expect(keys.get('opencode')).toBe('opencode-environment-value')
+    expect(keys.configured().opencode).toBe(true)
     await keys.set({ xai: 'database-value' })
     expect(keys.get('xai')).toBe('database-value')
     expect(JSON.stringify(await f.db.select().from(providerKeys))).not.toContain('database-value')

@@ -1,0 +1,169 @@
+---
+import { horizon } from '../content/landing'
+import Button from './Button.astro'
+---
+
+<section class="horizon" aria-labelledby="horizon" data-horizon>
+  <div class="horizon-image" role="img" aria-label="Three OpenStaff bots on a ridge looking out over the open frontier">
+    <picture>
+      <source media="(max-width: 47.999rem)" srcset="/illustrations/horizon-day-mobile.webp" width="1024" height="1536" />
+      <source media="(min-width: 1600px)" srcset="/illustrations/horizon-day-wide.webp" width="2172" height="724" />
+    <img
+      class="horizon-day"
+      src="/illustrations/horizon-day.webp"
+      srcset="/illustrations/horizon-day-sm.webp 960w, /illustrations/horizon-day.webp 1536w"
+      sizes="100vw"
+      width="1536"
+      height="1024"
+      alt=""
+      loading="eager"
+      fetchpriority="high"
+      decoding="async"
+    />
+    </picture>
+    <picture>
+      <source media="(max-width: 47.999rem)" srcset="/illustrations/horizon-night-mobile.webp" width="1024" height="1536" />
+      <source media="(min-width: 1600px)" srcset="/illustrations/horizon-night-wide.webp" width="2172" height="724" />
+    <img
+      class="horizon-night"
+      src="/illustrations/horizon.webp"
+      srcset="/illustrations/horizon-sm.webp 960w, /illustrations/horizon.webp 1536w"
+      sizes="100vw"
+      width="1536"
+      height="1024"
+      alt=""
+      loading="eager"
+      fetchpriority="high"
+      decoding="async"
+    />
+    </picture>
+  </div>
+  <div class="night-glow" aria-hidden="true"><span class="sun-glow"></span></div>
+  <div class="scrim" aria-hidden="true"></div>
+  <div class="horizon-copy">
+    <h1 id="horizon">
+      {horizon.title.map((line) => (
+        <span class="line" data-reveal>{line}</span>
+      ))}
+    </h1>
+    <div data-reveal>
+      <p class="body">{horizon.body}</p>
+      <div class="horizon-actions">
+        <Button href={horizon.actions.primary.href} size="lg">{horizon.actions.primary.label}</Button>
+        <Button href={horizon.actions.secondary.href} variant="secondary" tone="inverse" size="lg" external>{horizon.actions.secondary.label}</Button>
+      </div>
+    </div>
+  </div>
+
+</section>
+
+<style>
+  .horizon {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    width: 100%;
+    padding-top: 4rem;
+    aspect-ratio: 4 / 5;
+    background: #302333;
+    color: #fff;
+    --color-fg-subtle: rgb(255 255 255 / .85);
+    --color-fg-muted: #fff;
+  }
+  .horizon-image {
+    position: absolute;
+    inset: -7% 0;
+    width: 100%;
+    height: 114%;
+    max-width: none;
+    pointer-events: none;
+  }
+  .horizon-image img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: 38% 62%;
+  }
+  .horizon-night, .night-glow { opacity: 0; }
+  :global(html[data-theme='dark']) .horizon-night,
+  :global(html[data-theme='dark']) .night-glow { opacity: 1; }
+  @media (prefers-color-scheme: dark) {
+    :global(html:not([data-theme])) .horizon-night,
+    :global(html:not([data-theme])) .night-glow { opacity: 1; }
+  }
+  .night-glow { position: absolute; inset: 0; pointer-events: none; }
+  @media (prefers-reduced-motion: no-preference) {
+    :global(html.theme-transition) .horizon-night,
+    :global(html.theme-transition) .night-glow { transition: opacity 600ms cubic-bezier(.22, 1, .36, 1); }
+  }
+  .scrim {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(rgb(13 13 15 / .55), transparent 45%, rgb(13 13 15 / .35));
+    pointer-events: none;
+  }
+  /* Keep the white copy legible across the bright sunset without dimming the ridge. */
+  .scrim::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse 48% 42% at 50% 38%, rgb(13 13 15 / .6) 20%, transparent 100%);
+  }
+  .sun-glow {
+    position: absolute;
+    left: 62%;
+    top: 47%;
+    width: 34%;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgb(255 214 120 / .35), transparent 70%);
+    transform: translate(-50%, -50%);
+    opacity: .5;
+    pointer-events: none;
+  }
+  .horizon-copy {
+    position: relative;
+    max-width: 60rem;
+    padding: clamp(3rem, 7vw, 6rem) 1.5rem 3rem;
+    margin-inline: auto;
+    text-align: center;
+  }
+  h1 {
+    margin: 0;
+    color: #fff;
+    font-size: clamp(2.125rem, 5vw, 4.5rem);
+    font-weight: 600;
+    letter-spacing: -.02em;
+    line-height: 1.08;
+  }
+  .line { position: relative; display: block; }
+  .body {
+    max-width: 48ch;
+    margin: 1.25rem auto 0;
+    color: rgb(255 255 255 / .85);
+    font-size: 1.125rem;
+    line-height: 1.5;
+    text-wrap: pretty;
+  }
+  .horizon-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: .75rem; margin-top: 1.5rem; }
+  @media (max-width: 47.999rem) {
+    .horizon { display: flex; flex-direction: column; aspect-ratio: auto; min-height: max(42rem, 125vw); }
+    /* Keep the portrait's full group below the copy, including during scroll. */
+    .horizon-image { inset: 0; height: 100%; transform: none !important; }
+    .horizon-image img { object-position: center bottom; }
+    .sun-glow { left: 69%; top: 65%; width: 28%; }
+    .scrim { background: linear-gradient(rgb(13 13 15 / .55), rgb(13 13 15 / .1) 65%, rgb(13 13 15 / .18)); }
+    .scrim::after { background: radial-gradient(ellipse 95% 50% at 50% 38%, rgb(13 13 15 / .65) 35%, transparent 100%); }
+  }
+  @media (min-width: 48rem) { .horizon { aspect-ratio: 4 / 3; } }
+  @media (min-width: 64rem) {
+    .horizon { aspect-ratio: 16 / 9; min-height: 560px; max-height: 820px; }
+  }
+  @media (min-width: 100rem) {
+    .horizon { aspect-ratio: 3 / 1; min-height: 720px; max-height: 1100px; }
+    .horizon-image img { object-position: left 62%; }
+    .horizon-copy { padding-top: clamp(4rem, 5vw, 8rem); }
+  }
+</style>

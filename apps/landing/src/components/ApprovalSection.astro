@@ -1,0 +1,27 @@
+---
+import { approvals } from '../content/landing'
+import ApprovalMock from './mocks/ApprovalMock.astro'
+import Container from './Container.astro'
+import Eyebrow from './Eyebrow.astro'
+---
+
+<section class="approvals" aria-labelledby="approvals">
+  <Container class="approval-grid">
+    <div class="copy">
+      <Eyebrow index={approvals.index}>{approvals.eyebrow}</Eyebrow>
+      <h2 id="approvals">{approvals.title}<a class="anchor" href="#approvals" aria-label="Link to this section">#</a></h2>
+      <p>{approvals.body}</p>
+    </div>
+    <div data-mock-reveal><ApprovalMock /></div>
+  </Container>
+</section>
+
+<style>
+  .approvals { padding-block: 4rem; background: var(--color-app); }
+  :global(.approval-grid) { display: grid; align-items: center; gap: 3rem; }
+  .copy { max-width: 29rem; }
+  h2 { margin: 0.875rem 0 0; font-size: 1.75rem; font-weight: 600; letter-spacing: -0.02em; line-height: 1.15; }
+  p { margin: 1.25rem 0 0; color: var(--color-fg-muted); line-height: 1.6; }
+  @media (min-width: 48rem) { :global(.approval-grid) { grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); gap: 5rem; } }
+  @media (min-width: 64rem) { .approvals { padding-block: 6rem; } :global(.approval-grid) { gap: 7rem; } h2 { font-size: 2.25rem; } }
+</style>
