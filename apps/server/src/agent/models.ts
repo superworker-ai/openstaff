@@ -5,15 +5,14 @@ import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { createXai } from '@ai-sdk/xai'
 import type { LanguageModel } from 'ai'
 import { randomUUID } from 'node:crypto'
-import { createRequire } from 'node:module'
+import packageJson from '../../package.json' with { type: 'json' }
 import type { KeyStore } from '../secrets.js'
 
 /** Per-call context. `sessionId` is a stable id for one conversation; OpenCode Go routes and prompt-caches by it. */
 export type ResolveOptions = { sessionId?: string }
 export type ModelResolver = (id: string, options?: ResolveOptions) => LanguageModel
 
-const { version } = createRequire(import.meta.url)('../../package.json') as { version: string }
-export const OPENSTAFF_USER_AGENT = `openstaff/${version}`
+export const OPENSTAFF_USER_AGENT = `openstaff/${packageJson.version}`
 
 /** OpenCode Go rejects requests without `x-opencode-session` and asks clients to identify themselves (https://opencode.ai/docs/go/#where-can-i-use-it). */
 export function opencodeHeaders(sessionId?: string): Record<string, string> {

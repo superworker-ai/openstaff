@@ -22,7 +22,7 @@ RUN pnpm --filter server exec playwright install --with-deps chromium \
 
 FROM dependencies AS build
 COPY . .
-RUN pnpm build
+RUN pnpm --filter web build
 
 FROM dependencies AS server-build
 COPY . .
