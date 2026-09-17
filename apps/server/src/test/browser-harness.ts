@@ -6,6 +6,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { chromium, type BrowserContext } from 'playwright'
 import { MockLanguageModelV3 } from 'ai/test'
 import { startServer, type RunningServer } from '../app.js'
+import { botTemplates } from '../api/bots.js'
 import type { ModelResolver } from '../agent/models.js'
 import type { ComposioClient } from '../composio/client.js'
 import { objectResult, textStream } from './mock-model.js'
@@ -66,4 +67,61 @@ export async function browserHarness(options: { modelResolver?: ModelResolver; h
     const page = await context.newPage()
     return { page, context, api, url, stop }
   } catch (error) { await stop(); throw error }
+}
+
+export type BrowserHarness = Awaited<ReturnType<typeof browserHarness>>
+
+export const BROWSER_PASSWORD = 'browser-password123'
+
+/**
+ * Signs up through the Better Auth signup page and waits for the empty-workspace
+ * agent builder. Every browser suite starts here so the real form stays covered.
+ */
+export async function signUp(h: BrowserHarness, options: { name?: string; email?: string; password?: string } = {}): Promise<{ name: string; email: string; password: string }> {
+  const name = options.name ?? 'Browser Owner'
+  const email = options.email ?? `browser-${Date.now()}-${Math.random().toString(36).slice(2)}@example.test`
+  const password = options.password ?? BROWSER_PASSWORD
+  await h.page.goto(`${h.url}/login`, { waitUntil: 'domcontentloaded' })
+  await h.page.locator('body[data-hydrated="true"]').waitFor()
+  await h.page.getByRole('link', { name: 'Create account', exact: true }).click()
+  await h.page.getByRole('heading', { name: 'Create your account', exact: true }).waitFor()
+  await h.page.getByPlaceholder('Your name').fill(name)
+  await h.page.getByPlaceholder('Email', { exact: true }).fill(email)
+  await h.page.getByPlaceholder('Password', { exact: true }).fill(password)
+  await h.page.getByRole('button', { name: 'Create account', exact: true }).click()
+  // An empty workspace sends the new owner straight to the agent builder.
+  await h.page.waitForURL(`${h.url}/bots/new`, { waitUntil: 'domcontentloaded' })
+  await h.page.locator('body[data-hydrated="true"]').waitFor()
+  return { name, email, password }
+}
+
+/**
+ * Creates an agent through the current `/bots/new` document builder and returns the
+ * path of the room the builder opens. The starting point, the role it fills in, and
+ * the default approval policy are all verified on the way through.
+ */
+export async function createAgent(h: BrowserHarness, name: string, options: { template?: string; role?: string; approvals?: 'auto' | 'writes' | 'all' } = {}): Promise<string> {
+  await h.page.waitForURL(`${h.url}/bots/new`, { waitUntil: 'domcontentloaded' })
+  await h.page.locator('body[data-hydrated="true"]').waitFor()
+  const role = h.page.getByLabel('Role', { exact: true })
+  const templateName = options.template ?? botTemplates[0]!.name
+  const template = botTemplates.find((item) => item.name === templateName)
+  if (!template) throw new Error(`Unknown agent starting point: ${templateName}`)
+  if (options.template) await h.page.getByLabel('Starting point', { exact: true }).selectOption({ label: options.template })
+  if (options.role !== undefined) await role.fill(options.role)
+  else {
+    // The starting point owns the role, so the builder must have applied it.
+    const filled = await role.inputValue()
+    if (filled !== template.job) throw new Error(`Starting point "${templateName}" left the role as "${filled}", expected "${template.job}"`)
+  }
+  const approvals = h.page.getByLabel('Approvals', { exact: true })
+  if (options.approvals) await approvals.selectOption(options.approvals)
+  else {
+    const policy = await approvals.inputValue()
+    if (policy !== 'writes') throw new Error(`Expected the default approval policy to be "writes", got "${policy}"`)
+  }
+  await h.page.getByRole('textbox', { name: 'Agent name', exact: true }).fill(name)
+  await h.page.getByRole('button', { name: 'Create agent', exact: true }).click()
+  await h.page.waitForURL(/\/rooms\/room_[^/]+$/, { waitUntil: 'domcontentloaded' })
+  return new URL(h.page.url()).pathname
 }

@@ -4,11 +4,13 @@ import { describe, expect, it, vi } from 'vitest'
 import { MockLanguageModelV3 } from 'ai/test'
 import type { Bot, Message, PublicTurn, User } from '@openstaff/shared'
 import type { Locator } from 'playwright'
-import { browserHarness } from '../test/browser-harness.js'
+import { browserHarness, createAgent, signUp } from '../test/browser-harness.js'
 import { mockStream, mockUsage, objectResult, textStream } from '../test/mock-model.js'
 
 type Harness = Awaited<ReturnType<typeof browserHarness>>
 const email = 'owner@example.test', password = 'browser-password123'
+// The agent builder titles the page with the draft name, so an untouched draft reads "Untitled agent".
+const builderHeading = 'Untitled agent'
 
 async function assertRoute(h: Harness, pathname: string, heading: string) {
   await h.page.waitForURL(`${h.url}${pathname}`, { waitUntil: 'domcontentloaded' })
@@ -18,25 +20,15 @@ async function assertRoute(h: Harness, pathname: string, heading: string) {
 }
 
 async function signup(h: Harness) {
-  await h.page.goto(`${h.url}/login`, { waitUntil: 'domcontentloaded' })
-  await h.page.locator('body[data-hydrated="true"]').waitFor()
-  await h.page.getByRole('link', { name: 'Create account', exact: true }).click()
-  await h.page.getByPlaceholder('Your name').fill('Browser Owner')
-  await h.page.getByPlaceholder('Email', { exact: true }).fill(email)
-  await h.page.getByPlaceholder('Password', { exact: true }).fill(password)
-  await h.page.getByRole('button', { name: 'Create account', exact: true }).click()
-  await assertRoute(h, '/bots/new', 'Meet a future teammate')
+  await signUp(h, { name: 'Browser Owner', email, password })
+  await assertRoute(h, '/bots/new', builderHeading)
 }
 
 async function createBot(h: Harness, name: string) {
-  await assertRoute(h, '/bots/new', 'Meet a future teammate')
-  await h.page.getByRole('button', { name: /Engineer/ }).click()
-  expect(await h.page.getByPlaceholder('One clear line').inputValue()).toBe('Software engineer')
-  await h.page.getByPlaceholder('e.g. Drake').fill(name)
-  expect(await h.page.getByRole('combobox', { name: 'Approval policy' }).inputValue()).toBe('writes')
-  await h.page.getByRole('button', { name: 'Create teammate' }).click()
-  await h.page.waitForURL(/\/rooms\/room_[^/]+$/, { waitUntil: 'domcontentloaded' })
-  const roomPath = new URL(h.page.url()).pathname
+  await assertRoute(h, '/bots/new', builderHeading)
+  // createAgent verifies that the Engineer starting point fills the role and that
+  // approvals default to "writes" before it submits the document.
+  const roomPath = await createAgent(h, name, { template: 'Engineer' })
   await assertRoute(h, roomPath, name)
   await h.page.getByRole('navigation').getByRole('link', { name: new RegExp(name) }).waitFor()
   // Presence is the visible acknowledgement that the room's socket is subscribed.
@@ -52,6 +44,16 @@ async function readApi<T>(h: Harness, pathname: string): Promise<T> {
   const response = await h.context.request.get(`${h.url}/api${pathname}`)
   expect(response.ok()).toBe(true)
   return response.json() as Promise<T>
+}
+
+// The persona controls now live in the builder's appearance dialog.
+async function editAppearance(h: Harness, edit: (appearance: Locator) => Promise<void> | Promise<unknown>) {
+  await h.page.getByRole('button', { name: 'Edit appearance', exact: true }).click()
+  const appearance = h.page.getByRole('dialog', { name: 'Appearance', exact: true })
+  await appearance.waitFor()
+  await edit(appearance)
+  await appearance.getByRole('button', { name: 'Close appearance', exact: true }).click()
+  await appearance.waitFor({ state: 'detached' })
 }
 
 function thread(h: Harness, name: string) {
@@ -138,20 +140,22 @@ describe.skipIf(process.env.SKIP_BROWSER_TESTS === '1')('real browser UI flows',
     h.page.on('pageerror', (error) => errors.push(error.message))
     try {
       await signup(h)
-      await h.page.getByRole('button', { name: 'Personality: Gremlin', exact: true }).click()
-      await h.page.getByRole('button', { name: 'Eyes: happy', exact: true }).click()
-      await h.page.getByRole('button', { name: 'Accessory: glasses', exact: true }).click()
-      await h.page.getByRole('button', { name: 'Color: #7A5AF8', exact: true }).click()
-      await h.page.getByPlaceholder('e.g. Drake').fill('Pixel')
-      await h.page.getByRole('button', { name: 'Create teammate', exact: true }).click()
+      await editAppearance(h, async (appearance) => {
+        await appearance.getByRole('button', { name: 'Movement: Gremlin', exact: true }).click()
+        await appearance.getByRole('button', { name: 'Eyes: happy', exact: true }).click()
+        await appearance.getByRole('button', { name: 'Accessory: glasses', exact: true }).click()
+        await appearance.getByRole('button', { name: 'Color: #7A5AF8', exact: true }).click()
+      })
+      await h.page.getByRole('textbox', { name: 'Agent name', exact: true }).fill('Pixel')
+      await h.page.getByRole('button', { name: 'Create agent', exact: true }).click()
       await h.page.waitForURL(/\/rooms\/room_[^/]+$/, { waitUntil: 'domcontentloaded' })
       expect((await readApi<{ bots: Bot[] }>(h, '/bots')).bots[0]?.avatar).toEqual({ shape: 'drop', color: '#7A5AF8', eyes: 'happy', mouth: 'smile', accessory: 'glasses', personality: 'gremlin' })
       await h.page.getByRole('link', { name: 'Settings', exact: true }).click()
       await assertRoute(h, '/settings', 'Workspace settings')
       await h.page.getByRole('link', { name: 'Bots', exact: true }).click()
       await h.page.getByRole('link', { name: 'Edit Pixel', exact: true }).click()
-      await assertRoute(h, `/bots/${(await readApi<{ bots: Bot[] }>(h, '/bots')).bots[0]!.id}`, 'Edit teammate')
-      await h.page.getByRole('button', { name: 'Mouth: grin', exact: true }).click()
+      await assertRoute(h, `/bots/${(await readApi<{ bots: Bot[] }>(h, '/bots')).bots[0]!.id}`, 'Pixel')
+      await editAppearance(h, (appearance) => appearance.getByRole('button', { name: 'Mouth: grin', exact: true }).click())
       await h.page.getByRole('button', { name: 'Save changes', exact: true }).click()
       await h.page.waitForURL(/\/rooms\/room_[^/]+$/, { waitUntil: 'domcontentloaded' })
       expect((await readApi<{ bots: Bot[] }>(h, '/bots')).bots[0]?.avatar.mouth).toBe('grin')
@@ -217,7 +221,7 @@ describe.skipIf(process.env.SKIP_BROWSER_TESTS === '1')('real browser UI flows',
       expect((await readApi<{ rooms: unknown[] }>(h, '/rooms')).rooms).toEqual([])
       // A full navigation exercises the cookie-forwarding SSR loader, too.
       await h.page.goto(`${h.url}/`, { waitUntil: 'domcontentloaded' })
-      await assertRoute(h, '/bots/new', 'Meet a future teammate')
+      await assertRoute(h, '/bots/new', builderHeading)
       expect(errors).toEqual([])
     } finally { await h.stop() }
   }, 90_000)

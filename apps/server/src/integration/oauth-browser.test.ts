@@ -2,7 +2,7 @@ import fs from 'node:fs/promises'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { MockLanguageModelV3 } from 'ai/test'
 import { eq } from 'drizzle-orm'
-import { browserHarness } from '../test/browser-harness.js'
+import { browserHarness, signUp } from '../test/browser-harness.js'
 import { fakeOAuthServer, writeOAuthPlugin } from '../test/fake-oauth.js'
 import { mockStream, mockUsage, textStream } from '../test/mock-model.js'
 import { oauthClients, plugins, turns } from '../db/schema.js'
@@ -26,14 +26,7 @@ describe.skipIf(process.env.SKIP_BROWSER_TESTS === '1')('connection flows in the
       toolkits: async () => [{ slug: 'gmail', name: 'Gmail', description: 'Read, organize, and reply to email.' }, { slug: 'googledrive', name: 'Google Drive', description: 'Find and work with your documents.' }, { slug: 'github', name: 'GitHub', description: 'Work with repositories and issues.' }],
     } })
     h.page.on('pageerror', (error) => errors.push(error.message))
-    await h.page.goto(`${h.url}/login`, { waitUntil: 'domcontentloaded' })
-    await h.page.locator('body[data-hydrated="true"]').waitFor()
-    await h.page.getByRole('link', { name: 'Create account', exact: true }).click()
-    await h.page.getByPlaceholder('Your name').fill('Connections Owner')
-    await h.page.getByPlaceholder('Email', { exact: true }).fill('connections@example.com')
-    await h.page.getByPlaceholder('Password', { exact: true }).fill('password123')
-    await h.page.getByRole('button', { name: 'Create account', exact: true }).click()
-    await h.page.waitForURL('**/bots/new', { waitUntil: 'domcontentloaded' })
+    await signUp(h, { name: 'Connections Owner', email: 'connections@example.com', password: 'password123' })
     const root = await writeOAuthPlugin(h.api.config.dataDir, fake.url)
     const entries = [{ name: 'gmail', source: './gmail', hasMcp: true, manifest: { name: 'gmail', displayName: 'Gmail', description: 'Read, organize, and reply to email.' } }, { name: 'google-drive', source: './drive', hasMcp: true, manifest: { name: 'google-drive', displayName: 'Google Drive', description: 'Find and work with your documents.' } }, { name: 'github', source: './github', hasMcp: true, manifest: { name: 'github', displayName: 'GitHub', description: 'Work with repositories and issues.' } }]
     vi.spyOn(h.api.dependencies.installer.marketplace, 'entries').mockResolvedValue(entries)
@@ -47,7 +40,8 @@ describe.skipIf(process.env.SKIP_BROWSER_TESTS === '1')('connection flows in the
 
   it('install opens Connect, DCR popup closes, and the dialog receives Connected', async () => {
     const { page, context, url } = h
-    await page.getByRole('navigation', { name: 'First-run checklist' }).waitFor()
+    // Signup lands on the agent builder while the workspace is still empty.
+    await page.getByRole('heading', { name: 'Untitled agent', exact: true }).waitFor()
     await page.goto(`${url}/marketplace`, { waitUntil: 'domcontentloaded' })
     await page.getByRole('heading', { name: 'Gmail', exact: true }).waitFor()
     expect(await page.getByRole('tab', { name: 'Apps', exact: true }).getAttribute('aria-selected')).toBe('true')
@@ -125,10 +119,13 @@ describe.skipIf(process.env.SKIP_BROWSER_TESTS === '1')('connection flows in the
     expect(await members.locator('[data-status="expired"]').count()).toBe(1)
     await h.page.screenshot({ path: '/tmp/shots-connections-2/members-apps.png', fullPage: true })
     await provider.saveTokens({ access_token: 'access-initial', token_type: 'Bearer' })
+    // The first-run checklist lives on the home feed and is still open: no model key yet.
+    await h.page.goto(`${h.url}/`, { waitUntil: 'domcontentloaded' })
+    await h.page.getByRole('navigation', { name: 'First-run checklist' }).waitFor()
     await h.api.dependencies.keys.set({ xai: 'fake-test-key' })
     expect(await (await h.context.request.get(`${h.url}/api/workspace/onboarding`)).json()).toMatchObject({ model: true, connected: true, hasBots: true, complete: true })
-    await h.page.goto(`${h.url}/bots/new`, { waitUntil: 'domcontentloaded' })
-    await h.page.getByRole('heading', { name: 'Meet a future teammate' }).waitFor()
+    await h.page.goto(`${h.url}/`, { waitUntil: 'domcontentloaded' })
+    await h.page.getByRole('main', { name: 'Home' }).waitFor()
     await vi.waitFor(async () => expect(await h.page.getByRole('navigation', { name: 'First-run checklist' }).count()).toBe(0))
     expect(popup.isClosed()).toBe(true)
     expect(errors).toEqual([])
