@@ -61,9 +61,12 @@ describe('/api/workspace/experimental', () => {
     }
     const row = async () => (await running.database.db.select().from(workspace))[0]
     try {
-      const signup = await request('/api/auth/signup', 'POST', { name: 'Owner', email: 'owner@example.com', password: 'password123' })
+      const signup = await request('/api/auth/sign-up/email', 'POST', { name: 'Owner', email: 'owner@example.com', password: 'password123' })
       cookie = signup.response.headers.get('set-cookie')!.split(';')[0]!
       const ownerCookie = cookie
+      // Workspace security settings live beside the experiment in the same column, so every
+      // assertion below compares against the settings that exist before Jev is configured.
+      const baseSettings = ((await row())?.settings ?? {}) as Record<string, unknown>
 
       const defaults = await request('/api/workspace/experimental')
       expect(defaults.response.status).toBe(200)
@@ -73,7 +76,7 @@ describe('/api/workspace/experimental', () => {
       const keyless = await request('/api/workspace/experimental', 'PUT', { jev: { mode: 'shadow' } })
       expect(keyless.response.status).toBe(400)
       expect(keyless.data).toEqual({ error: 'A TypeSafe API key is required for shadow mode' })
-      expect((await row())?.settings).toEqual({})
+      expect((await row())?.settings).toEqual(baseSettings)
       expect((await request('/api/workspace/experimental')).data.jev.mode).toBe('off')
       expect(running.dependencies.replyDecisionManager.get()).toBeUndefined()
 
@@ -84,7 +87,7 @@ describe('/api/workspace/experimental', () => {
       expect(JSON.stringify((await request('/api/workspace/experimental')).data)).not.toContain('canary-typesafe')
       expect(JSON.stringify(await row())).not.toContain('canary-typesafe')
       expect(JSON.stringify(await running.database.db.select().from(providerKeys))).not.toContain('canary-typesafe')
-      expect((await row())?.settings).toEqual({ experimental: { jev: { mode: 'shadow', model: 'jev-1.13.0', timeoutMs: 900, roomIds: ['room_x'] } } })
+      expect((await row())?.settings).toEqual({ ...baseSettings, experimental: { jev: { mode: 'shadow', model: 'jev-1.13.0', timeoutMs: 900, roomIds: ['room_x'] } } })
       // Hot reload: the live runtime sees the new experiment without restarting the server.
       expect(running.dependencies.replyDecisionManager.get()?.applies('room_x')).toBe(true)
       expect(running.dependencies.replyDecisionManager.get()?.applies('room_other')).toBe(false)
@@ -93,11 +96,11 @@ describe('/api/workspace/experimental', () => {
       const keyOnly = await request('/api/workspace/experimental', 'PUT', { jev: { apiKey: 'canary-typesafe-2' } })
       expect(keyOnly.response.status).toBe(200)
       expect(keyOnly.data.jev).toMatchObject({ mode: 'shadow', model: 'jev-1.13.0', timeoutMs: 900, roomIds: ['room_x'], keyConfigured: true, keySource: 'settings' })
-      expect((await row())?.settings).toEqual({ experimental: { jev: { mode: 'shadow', model: 'jev-1.13.0', timeoutMs: 900, roomIds: ['room_x'] } } })
+      expect((await row())?.settings).toEqual({ ...baseSettings, experimental: { jev: { mode: 'shadow', model: 'jev-1.13.0', timeoutMs: 900, roomIds: ['room_x'] } } })
       const timeoutOnly = await request('/api/workspace/experimental', 'PUT', { jev: { timeoutMs: 2500 } })
       expect(timeoutOnly.response.status).toBe(200)
       expect(timeoutOnly.data.jev).toMatchObject({ mode: 'shadow', model: 'jev-1.13.0', timeoutMs: 2500, roomIds: ['room_x'] })
-      expect((await row())?.settings).toEqual({ experimental: { jev: { mode: 'shadow', model: 'jev-1.13.0', timeoutMs: 2500, roomIds: ['room_x'] } } })
+      expect((await row())?.settings).toEqual({ ...baseSettings, experimental: { jev: { mode: 'shadow', model: 'jev-1.13.0', timeoutMs: 2500, roomIds: ['room_x'] } } })
       expect(running.dependencies.replyDecisionManager.get()?.applies('room_x')).toBe(true)
       for (const canary of ['canary-typesafe', 'canary-typesafe-2']) {
         expect(JSON.stringify(keyOnly.data)).not.toContain(canary)
@@ -113,7 +116,7 @@ describe('/api/workspace/experimental', () => {
       expect(JSON.stringify((await request('/api/workspace/provider-keys')).data)).not.toContain('canary-typesafe')
       expect(JSON.stringify((await request('/api/workspace')).data)).not.toContain('canary-typesafe')
 
-      const other = await request('/api/auth/signup', 'POST', { name: 'Other', email: 'other@example.com', password: 'password123' })
+      const other = await request('/api/auth/sign-up/email', 'POST', { name: 'Other', email: 'other@example.com', password: 'password123' })
       cookie = other.response.headers.get('set-cookie')!.split(';')[0]!
       expect((await request('/api/workspace/experimental')).response.status).toBe(200)
       expect((await request('/api/workspace/experimental', 'PUT', { jev: { mode: 'off' } })).response.status).toBe(403)
