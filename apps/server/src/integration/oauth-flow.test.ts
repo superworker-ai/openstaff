@@ -42,7 +42,9 @@ it('HTTP OAuth connect → authenticated callback → MCP tool succeeds; expired
     expect((await fetch(`${api.url}${callbackRoute}`, { redirect: 'manual' })).status).toBe(401)
     const completed = await request(callbackRoute)
     expect(completed.status).toBe(200); expect(await completed.text()).toContain('openstaff:connected')
-    expect((await request(callbackRoute)).headers.get('location')).toContain('error=')
+    // A reused state has no connect page to return to, so the popup renders the failure page in place.
+    const reused = await request(callbackRoute)
+    expect(reused.status).toBe(200); expect(reused.headers.get('location')).toBeNull(); expect(await reused.text()).toContain('Could not connect')
     expect(fake.grants[0]?.get('client_secret')).toBe('manual-secret')
     expect(await (await request(`/api/plugins/${id}/servers`)).json()).toMatchObject({ servers: [{ connected: true }] })
     const session = await openPluginTools(api.dependencies.registry.enabled(), undefined, undefined, api.dependencies.registry.oauth)

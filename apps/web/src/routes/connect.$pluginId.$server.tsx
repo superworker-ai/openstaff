@@ -8,6 +8,6 @@ export const Route = createFileRoute('/connect/$pluginId/$server')({
   component: ConnectPage,
 })
 function ConnectPage() {
-  const { pluginId, server } = Route.useParams(), { approval } = Route.useSearch()
-  return <ConnectDialog pluginId={pluginId} serverName={server} approvalId={approval} standalone />
+  const { pluginId, server } = Route.useParams(), { approval, error } = Route.useSearch()
+  return <ConnectDialog pluginId={pluginId} serverName={server} approvalId={approval} initialError={error} standalone />
 }

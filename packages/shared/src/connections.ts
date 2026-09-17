@@ -39,5 +39,6 @@ export function connectionError(error: unknown): string {
   if (message.includes('redirect_uri_mismatch')) return 'Add exactly this redirect URI to the OAuth client'
   if (message.includes('invalid_client') || (error instanceof Error && 'errorCode' in error.constructor && error.constructor.errorCode === 'invalid_client')) return 'Client ID or secret is wrong'
   if (message.includes('access_denied')) return 'You declined the consent screen'
+  if (/not active yet/i.test(message)) return 'Sign-in did not finish. Try connecting again.'
   return message
 }
