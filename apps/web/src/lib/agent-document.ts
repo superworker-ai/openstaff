@@ -12,6 +12,11 @@ export const AGENT_DOCUMENT_COVERS = [
   { id: 'city-sunrise', label: 'City sunrise', src: '/agent-covers/city-sunrise.webp' },
   { id: 'alpine-lake', label: 'Alpine lake', src: '/agent-covers/alpine-lake.webp' },
   { id: 'rolling-hills', label: 'Rolling hills', src: '/agent-covers/rolling-hills.webp' },
+  { id: 'monterrey-huasteca', label: 'Monterrey · La Huasteca', src: '/agent-covers/monterrey-huasteca.webp' },
+  { id: 'san-francisco-horizon', label: 'San Francisco · Golden Gate', src: '/agent-covers/san-francisco-horizon.webp' },
+  { id: 'lake-tahoe-horizon', label: 'Lake Tahoe', src: '/agent-covers/lake-tahoe-horizon.webp' },
+  { id: 'barcelona-horizon', label: 'Barcelona', src: '/agent-covers/barcelona-horizon.webp' },
+  { id: 'bogota-horizon', label: 'Bogotá', src: '/agent-covers/bogota-horizon.webp' },
 ] as const
 
 type AgentDocumentCoverImage = typeof AGENT_DOCUMENT_COVERS[number]['id']

@@ -17,5 +17,8 @@ export const MODEL_CATALOG = [
   { id: 'opencode/deepseek-v4-flash', name: 'DeepSeek V4 Flash (OpenCode Zen)' },
   { id: 'opencode/big-pickle', name: 'Big Pickle (OpenCode Zen, free)' },
 ] as const
-export const PROVIDERS = ['xai', 'anthropic', 'openai', 'opencode', 'composio', 'aiGateway'] as const
+export const PROVIDERS = ['xai', 'anthropic', 'openai', 'opencode', 'composio', 'aiGateway', 'typesafe'] as const
 export type Provider = typeof PROVIDERS[number]
+/** `typesafe` is a credential for the experimental reply-decision service, never a chat model provider. */
+export type ModelProvider = Exclude<Provider, 'typesafe'>
+export const MODEL_PROVIDERS: readonly ModelProvider[] = PROVIDERS.filter((provider): provider is ModelProvider => provider !== 'typesafe')
