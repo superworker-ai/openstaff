@@ -1,6 +1,5 @@
 ---
-import { GITHUB_URL } from '../config'
-import Button from './Button.astro'
+import GitHubStars from './GitHubStars.astro'
 import Container from './Container.astro'
 import ThemeToggle from './ThemeToggle.astro'
 import BrandMark from './BrandMark.astro'
@@ -21,11 +20,10 @@ const links = [
 
     <div class="nav-links">
       {links.map((link) => <a href={link.href}>{link.label}</a>)}
-      <a href={GITHUB_URL} target="_blank" rel="noopener">GitHub</a>
     </div>
 
     <div class="nav-actions">
-      <Button href={GITHUB_URL} external>View on GitHub</Button>
+      <GitHubStars />
     </div>
 
     <div class="nav-theme"><ThemeToggle /></div>
@@ -39,9 +37,8 @@ const links = [
       </summary>
       <div class="mobile-panel">
         {links.map((link) => <a href={link.href}>{link.label}</a>)}
-        <a href={GITHUB_URL} target="_blank" rel="noopener">GitHub</a>
         <div class="mobile-actions">
-          <Button href={GITHUB_URL} external>View on GitHub</Button>
+          <GitHubStars />
         </div>
       </div>
     </details>
@@ -233,7 +230,7 @@ const links = [
 
   .mobile-actions {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
     gap: 0.5rem;
     padding-top: 0.5rem;
   }
