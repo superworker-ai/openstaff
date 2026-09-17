@@ -13,7 +13,7 @@ it('protects secrets, installs plugins, and authorizes automation mutations thro
     return { response, data: await response.json() }
   }
   try {
-    const signup = await request('/api/auth/signup', 'POST', { name: 'Owner', email: 'owner@example.com', password: 'password123' })
+    const signup = await request('/api/auth/sign-up/email', 'POST', { name: 'Owner', email: 'owner@example.com', password: 'password123' })
     cookie = signup.response.headers.get('set-cookie')!.split(';')[0]!
     const ownerCookie = cookie
     expect((await request('/api/workspace/provider-keys', 'PUT', { xai: 'canary-key' })).data).toMatchObject({ configured: { xai: true } })
@@ -37,7 +37,7 @@ it('protects secrets, installs plugins, and authorizes automation mutations thro
     const automation = await request('/api/automations', 'POST', { name: 'Check', trigger: 'schedule', cron: '* * * * *', prompt: 'hello', targetBotIds: [bot.bot.id], roomId: bot.room.id })
     expect(automation.response.status).toBe(201)
     expect((await request(`/api/automations/${automation.data.automation.id}`, 'PATCH', { enabled: false })).data.automation.enabled).toBe(false)
-    const other = await request('/api/auth/signup', 'POST', { name: 'Other', email: 'other@example.com', password: 'password123' })
+    const other = await request('/api/auth/sign-up/email', 'POST', { name: 'Other', email: 'other@example.com', password: 'password123' })
     cookie = other.response.headers.get('set-cookie')!.split(';')[0]!
     expect((await request('/api/workspace/provider-keys', 'PUT', { xai: 'forbidden' })).response.status).toBe(403)
     expect((await request(`/api/plugins/${id}`, 'DELETE')).response.status).toBe(403)

@@ -2,8 +2,9 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { eq } from 'drizzle-orm'
 import { computerFixture } from '../test/computer-fixture.js'
 import { ComputerConflictError, ComputerManager } from './manager.js'
+import { ComputerError } from './provider.js'
 import { Secrets } from '../secrets.js'
-import { workspace } from '../db/schema.js'
+import { computerSessions, workspace } from '../db/schema.js'
 import { ComputerLeaseService } from './lease.js'
 import type { RealtimeHub } from '../realtime/hub.js'
 
@@ -37,9 +38,47 @@ it('reattaches to the persisted instance on a second manager resolve', async () 
   await f.manager.setProvider('e2b')
   expect(f.open.mock.calls[0]![0].instance).toBeNull()
   await f.manager.close()
+  await f.db.insert(computerSessions).values({ id: 'cps_stale', provider: 'daytona', externalId: 'stale-instance', startedAt: '2026-09-01T00:00:00.000Z', endedAt: null, endReason: null })
   const next = new ComputerManager(f.directory, f.db, new Secrets(Buffer.alloc(32, 1)))
-  try { await next.initialize(); expect(f.open.mock.calls[1]![0].instance?.externalId).toBe('stub-instance') }
+  try {
+    await next.initialize(); expect(f.open.mock.calls[1]![0].instance?.externalId).toBe('stub-instance')
+    const rows = await f.db.select().from(computerSessions)
+    expect(rows.find((row) => row.provider === 'e2b')).toMatchObject({ endedAt: null, endReason: null })
+    expect(rows.find((row) => row.provider === 'daytona')).toMatchObject({ endedAt: expect.any(String), endReason: 'restart' })
+  }
   finally { await next.close() }
+})
+it('refuses a stored local Computer on hosted plans with a permanent error', async () => {
+  const manager = new ComputerManager(f.directory, f.db, new Secrets(Buffer.alloc(32, 1)), f.durable, 'starter')
+  try {
+    const error = await manager.initialize().catch((reason) => reason)
+    expect(error).toBeInstanceOf(ComputerError)
+    expect(error).toMatchObject({ kind: 'permanent', message: 'The local Computer is not available on this plan' })
+  } finally { await manager.close() }
+})
+it('opens, supersedes, stops, resumes, and destroys metered sessions', async () => {
+  await f.manager.setProvider('e2b')
+  let rows = await f.db.select().from(computerSessions).orderBy(computerSessions.startedAt)
+  expect(rows).toHaveLength(1)
+  expect(rows[0]).toMatchObject({ provider: 'e2b', externalId: 'stub-instance', endedAt: null, endReason: null })
+  await f.open.mock.calls[0]![0].persist({ externalId: 'replacement-instance', status: 'ready' })
+  rows = await f.db.select().from(computerSessions).orderBy(computerSessions.startedAt)
+  expect(rows).toHaveLength(2)
+  expect(rows[0]).toMatchObject({ endReason: 'superseded', endedAt: expect.any(String) })
+  expect(rows[1]).toMatchObject({ externalId: 'replacement-instance', endedAt: null })
+  await f.manager.stop()
+  expect((await f.db.select().from(computerSessions).orderBy(computerSessions.startedAt)).at(-1)).toMatchObject({ endReason: 'stopped', endedAt: expect.any(String) })
+  await f.manager.restart()
+  expect((await f.db.select().from(computerSessions).orderBy(computerSessions.startedAt)).at(-1)).toMatchObject({ externalId: 'replacement-instance', endedAt: null })
+  await f.manager.destroy()
+  expect((await f.db.select().from(computerSessions).orderBy(computerSessions.startedAt)).at(-1)).toMatchObject({ endReason: 'destroyed', endedAt: expect.any(String) })
+})
+
+it('closes an idle Computer session with the idle reason', async () => {
+  vi.useFakeTimers(); vi.stubEnv('COMPUTER_IDLE_MINUTES', '1')
+  await f.manager.setProvider('e2b')
+  await vi.advanceTimersByTimeAsync(60_000)
+  expect((await f.db.select().from(computerSessions)).at(-1)).toMatchObject({ endReason: 'idle', endedAt: expect.any(String) })
 })
 it('materializes durable storage when opening a non-host Computer', async () => {
   await f.durable.put('bots/drake/MEMORY.md', new Uint8Array(Buffer.from('durable')))

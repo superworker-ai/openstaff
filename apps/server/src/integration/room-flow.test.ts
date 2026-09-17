@@ -32,8 +32,8 @@ describe('group room flow', () => {
       doStream: textStream('Hello from Bot One.'),
     })
     running = await startServer({ config: { dataDir: directory, port: 0 }, modelResolver: () => model })
-    const signup = await fetch(`${running.url}/api/auth/signup`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Owner', email: 'owner@example.com', password: 'password123' }) })
-    expect(signup.status).toBe(201)
+    const signup = await fetch(`${running.url}/api/auth/sign-up/email`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Owner', email: 'owner@example.com', password: 'password123' }) })
+    expect(signup.status).toBe(200)
     const cookie = signup.headers.get('set-cookie')!.split(';')[0]!
     const request = async <T>(url: string, init?: RequestInit): Promise<T> => {
       const response = await fetch(`${running!.url}${url}`, { ...init, headers: { cookie, 'content-type': 'application/json', ...init?.headers } })

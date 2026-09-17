@@ -5,6 +5,7 @@ import { appName, avatarSchema, createId, suggestedApps } from '@openstaff/share
 import { bots, roomMembers, rooms } from '../db/schema.js'
 import type { ApiDependencies, AppEnv } from './context.js'
 import { isResponse, parseBody } from './helpers.js'
+import { checkBotPlan } from '../plan.js'
 
 export const botTemplates = [
   { id: 'research', name: 'Research', job: 'Research partner', instructions: 'Find reliable information, compare sources, and surface concise insights.', avatar: { shape: 'drop', color: '#2E90FA', eyes: 'round', mouth: 'smile', accessory: 'glasses', personality: 'curious' } },
@@ -40,7 +41,7 @@ function slugify(name: string): string {
   return name.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'bot'
 }
 
-export function botRoutes({ db, hub, admission, computer, durable }: ApiDependencies): Hono<AppEnv> {
+export function botRoutes({ db, hub, admission, computer, durable, config }: ApiDependencies): Hono<AppEnv> {
   const app = new Hono<AppEnv>()
   app.get('/templates', (context) => context.json({ templates: botTemplates }))
   app.get('/', async (context) => context.json({ bots: await db.select().from(bots).orderBy(bots.createdAt) }))
@@ -48,6 +49,8 @@ export function botRoutes({ db, hub, admission, computer, durable }: ApiDependen
   app.post('/', async (context) => {
     const input = await parseBody(context, createBotSchema)
     if (isResponse(input)) return input
+    const limit = await checkBotPlan(db, config)
+    if (limit) return context.json(limit.body(), 402)
     const user = context.get('user')
     const base = slugify(input.name)
     let slug = base

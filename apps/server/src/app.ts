@@ -2,13 +2,15 @@ import type { Server } from 'node:http'
 import './load-env.js'
 import { serve, type ServerType } from '@hono/node-server'
 import { Hono } from 'hono'
+import { PLAN_LIMITS } from '@openstaff/shared'
+import { eq, sql } from 'drizzle-orm'
 import { readConfig, type Config } from './config.js'
 import { createDatabase, type DatabaseHandle } from './db/index.js'
 import { ComputerManager } from './computer/manager.js'
 import { BrowserService } from './browser/service.js'
 import { RoomCompactor } from './agent/compaction.js'
 import { uploadRoutes } from './api/uploads.js'
-import { usageRoutes } from './api/usage.js'
+import { usageExportRoutes, usageRoutes } from './api/usage.js'
 import { screenRoutes } from './api/screens.js'
 import { RealtimeHub } from './realtime/hub.js'
 import { AdmissionService } from './rooms/admission.js'
@@ -17,13 +19,14 @@ import { resolveModel, type ModelResolver } from './agent/models.js'
 import { replyDecisionExperimentFromEnv, type ReplyDecisionExperiment } from './agent/reply-decision.js'
 import { TurnScheduler } from './rooms/scheduler.js'
 import { requireAuth } from './auth/session.js'
-import { authRoutes } from './api/auth.js'
+import { publicUser } from './auth/session.js'
+import { authHandler, createAuth, ssoMutationGuard, type OpenStaffAuth } from './auth/better-auth.js'
 import { botRoutes } from './api/bots.js'
 import { roomRoutes } from './api/rooms.js'
 import { approvalRoutes, turnRoutes } from './api/turns.js'
 import { taskRoutes } from './api/tasks.js'
 import { workspaceRoutes } from './api/workspace.js'
-import { users } from './db/schema.js'
+import { ssoProvider, users, workspace } from './db/schema.js'
 import type { ApiDependencies, AppEnv } from './api/context.js'
 import { KeyStore, Secrets } from './secrets.js'
 import { PluginRegistry } from './plugins/registry.js'
@@ -40,11 +43,16 @@ import { roomConnectionRoutes } from './api/room-connect.js'
 import { ConnectionHealth } from './plugins/connection-health.js'
 import { computerRoutes } from './api/computer.js'
 import { computerDesktopRoutes } from './api/computer-desktop.js'
-import { sql } from 'drizzle-orm'
 import { ComputerLeaseService } from './computer/lease.js'
 import { createWorkspaceStore, type WorkspaceStore } from './storage/index.js'
 import { DurableWorkspace } from './storage/durable.js'
 import { homeRoutes } from './api/home.js'
+import { suspendedGate } from './suspended.js'
+import { createMailer } from './email/index.js'
+import { createAuditWriter } from './audit.js'
+import { invitationRoutes, memberRoutes, publicInvitationRoutes } from './api/members.js'
+import { auditRoutes } from './api/audit.js'
+import { securityRoutes } from './api/security.js'
 
 export interface CreateApplicationOptions {
   composioClient?: ComposioClient
@@ -57,6 +65,7 @@ export interface CreateApplicationOptions {
 
 export interface Application {
   app: Hono<AppEnv>
+  auth: OpenStaffAuth
   config: Config
   database: DatabaseHandle
   dependencies: ApiDependencies
@@ -68,19 +77,25 @@ export async function createApplication(options: CreateApplicationOptions = {}):
   const replyDecisionExperiment = options.replyDecisionExperiment ?? replyDecisionExperimentFromEnv(process.env, config.dataDir)
   const database = await createDatabase(config.dataDir, true, config.defaultModel)
   const secrets = await Secrets.open(config.dataDir)
+  const sendEmail = createMailer(config)
+  const audit = createAuditWriter(database.db)
+  const auth = createAuth(config, database.db, { sendEmail, audit })
   const store = options.workspaceStore ?? createWorkspaceStore(config.dataDir)
   const durable = new DurableWorkspace(store, database.db)
-  const computer = new ComputerManager(`${config.dataDir}/workspace`, database.db, secrets, durable)
-  const hub = new RealtimeHub(database.db, () => computer.desktop(), config.publicAppUrl)
+  const computer = new ComputerManager(`${config.dataDir}/workspace`, database.db, secrets, durable, config.plan)
+  const hub = new RealtimeHub(database.db, auth, () => computer.desktop(), config.publicAppUrl, config.state)
   computer.setHub(hub)
-  // A broken or unreachable Computer provider must never take the app down: login, settings and
-  // provider switching still work, and the status endpoint reports the error.
-  try { await computer.initialize() } catch (error) { console.error(`Computer provider failed to open: ${error instanceof Error ? error.message : String(error)}`) }
+  try { await computer.initialize() }
+  catch (error) {
+    const stored = (await database.db.select({ computerDriver: workspace.computerDriver }).from(workspace).where(eq(workspace.id, 'workspace')).limit(1))[0]?.computerDriver
+    if (config.plan !== 'self-hosted' && stored === 'local' && error instanceof Error && error.message === 'The local Computer is not available on this plan') console.warn('The stored local Computer is not available on this hosted plan; select a hosted provider in Settings')
+    else console.error(`Computer provider failed to open: ${error instanceof Error ? error.message : String(error)}`)
+  }
   const lease = new ComputerLeaseService(database.db, hub)
   computer.setLease(lease)
   hub.setLease(lease)
   const admission = new AdmissionService(database.db, hub)
-  const keys = new KeyStore(database.db, secrets)
+  const keys = new KeyStore(database.db, secrets, config.managedKeys)
   await keys.load()
   const registry = new PluginRegistry(database.db, secrets, config.publicAppUrl)
   await registry.rebuild()
@@ -93,7 +108,7 @@ export async function createApplication(options: CreateApplicationOptions = {}):
   const runtime = new AgentRuntime({ browser, db: database.db, computer, durable, admission, hub, registry, composio, automationService, contextMessages: config.contextMessages, modelResolver, replyDecisionExperiment })
   const scheduler = new TurnScheduler(database.db, runtime, admission, hub, config.maxConcurrentTurns, compactor)
   admission.setTurnEnqueuer((newTurns) => scheduler.enqueue(newTurns))
-  const dependencies: ApiDependencies = { db: database.db, config, computer, durable, lease, admission, scheduler, hub, secrets, keys, registry, installer, composio, automationService, modelResolver }
+  const dependencies: ApiDependencies = { auth, audit, sendEmail, db: database.db, config, computer, durable, lease, admission, scheduler, hub, secrets, keys, registry, installer, composio, automationService, modelResolver }
   const connectionHealth = new ConnectionHealth(registry.oauth, hub)
   const app = new Hono<AppEnv>()
 
@@ -109,9 +124,20 @@ export async function createApplication(options: CreateApplicationOptions = {}):
   app.get('/api/ready', async (context) => {
     try { await database.db.run(sql`SELECT 1`); return context.json({ ok: true }) } catch { return context.json({ ok: false }, 503) }
   })
-  app.route('/api/auth', authRoutes(dependencies))
+  app.get('/api/plan', (context) => context.json({ plan: config.plan, state: config.state, managedKeys: config.managedKeys, billingUrl: config.billingUrl ?? null, limits: PLAN_LIMITS[config.plan] }))
+  app.get('/api/auth-config', async (context) => context.json({ password: true, magicLink: true, signup: config.authSignup, socialProviders: Object.keys(config.social), sso: Boolean((await database.db.select({ id: ssoProvider.id }).from(ssoProvider).limit(1))[0]), emailVerification: config.email.provider !== 'console' }))
+  const guardSsoMutation = ssoMutationGuard(auth, config)
+  for (const path of ['/api/auth/sso/register', '/api/auth/sso/update-provider', '/api/auth/sso/delete-provider', '/api/auth/sso/request-domain-verification', '/api/auth/sso/verify-domain']) app.use(path, guardSsoMutation)
+  app.on(['GET', 'POST'], '/api/auth/*', authHandler(auth))
+  app.use('/api/*', suspendedGate(config.state))
+  app.route('/api/invitations', publicInvitationRoutes(dependencies))
   app.route('/api/hooks', hookRoutes(dependencies))
-  app.use('/api/*', requireAuth(database.db))
+  app.route('/api/usage/export', usageExportRoutes(dependencies))
+  app.use('/api/*', requireAuth(auth, database.db))
+  app.route('/api/invitations', invitationRoutes(dependencies))
+  app.route('/api/members', memberRoutes(dependencies))
+  app.route('/api/audit', auditRoutes(dependencies))
+  app.route('/api/security', securityRoutes(dependencies))
   app.route('/api/bots', botRoutes(dependencies))
   app.route('/api/rooms', uploadRoutes(dependencies))
   app.route('/api/usage', usageRoutes(dependencies))
@@ -128,7 +154,7 @@ export async function createApplication(options: CreateApplicationOptions = {}):
   app.route('/api/home', homeRoutes(dependencies))
   app.route('/api/computer', computerRoutes(dependencies))
   app.route('/api/computer/desktop', computerDesktopRoutes(dependencies))
-  app.get('/api/users', async (context) => context.json({ users: await database.db.select({ id: users.id, name: users.name, email: users.email, avatar: users.avatar, role: users.role, createdAt: users.createdAt }).from(users).orderBy(users.name) }))
+  app.get('/api/users', async (context) => context.json({ users: (await database.db.select().from(users).orderBy(users.name)).map(publicUser) }))
   app.route('/api/screens', screenRoutes(dependencies))
   app.notFound((context) => context.json({ error: 'Not found' }, 404))
   app.onError((error, context) => {
@@ -141,7 +167,7 @@ export async function createApplication(options: CreateApplicationOptions = {}):
   composio.start()
   const expiryTimer = setInterval(() => { void expireApprovals(database.db, hub, Date.now(), admission).catch(() => console.warn('Approval expiry failed')) }, 60_000)
   expiryTimer.unref()
-  return { app, config, database, dependencies, close: async () => { clearInterval(expiryTimer); composio.stop(); await connectionHealth.stop(); automationService.stop(); lease.close(); await scheduler.shutdown(); await replyDecisionExperiment?.close(); await compactor.close(); await browser.close(); await computer.close(); await registry.mcpPool.close(); hub.close(); database.close() } }
+  return { app, auth, config, database, dependencies, close: async () => { clearInterval(expiryTimer); composio.stop(); await connectionHealth.stop(); automationService.stop(); lease.close(); await scheduler.shutdown(); await replyDecisionExperiment?.close(); await compactor.close(); await browser.close(); await computer.close(); await registry.mcpPool.close(); hub.close(); database.close() } }
 }
 
 export interface RunningServer extends Application {

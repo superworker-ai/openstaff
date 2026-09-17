@@ -5,6 +5,7 @@ import { AUTOMATION_OVERLAP, AUTOMATION_TRIGGERS, MAX_AUTOMATION_TARGETS, type A
 import { automationInvocations, automationRuns, roomMembers } from '../db/schema.js'
 import { isResponse, parseBody } from './helpers.js'
 import type { ApiDependencies, AppEnv } from './context.js'
+import { checkAutomationPlan } from '../plan.js'
 
 const createSchema = z.object({
   name: z.string().trim().min(1).max(100), trigger: z.enum(AUTOMATION_TRIGGERS), cron: z.string().trim().min(1).nullable(), timezone: z.string().trim().min(1).default('UTC'),
@@ -36,6 +37,8 @@ export function automationRoutes({ db, automationService, admission, scheduler, 
     const input = await parseBody(context, createSchema)
     if (isResponse(input)) return input
     if (!await admission.isMember(input.roomId, 'user', context.get('user').id)) return context.json({ error: 'Room not found' }, 404)
+    const limit = await checkAutomationPlan(db, config)
+    if (limit) return context.json(limit.body(), 402)
     try {
       const result = await automationService.create(input, context.get('user').id)
       const { webhookKey, ...automation } = result

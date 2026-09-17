@@ -4,6 +4,7 @@ import { Bot, Folder, GripVertical, Home, LogOut, MoreHorizontal, PanelLeft, Plu
 import type { Bot as BotType, User } from '@openstaff/shared'
 import type { RoomView } from '../lib/loaders'
 import { api, formatTime } from '../lib/api'
+import { authClient } from '../lib/auth-client'
 import { sortRooms } from '../lib/room-order'
 import { responsivePaneOpen } from '../lib/responsive-pane'
 import { groupRoomsBySection, ROOM_SECTION_MAX_LENGTH } from '../lib/room-sections'
@@ -136,7 +137,7 @@ function AppShellContent({ currentRoomId, currentUser, bots, users, home = false
   const sections = useMemo(() => groupRoomsBySection(sortRooms(filtered), sectionNames), [filtered, sectionNames])
   const sorted = sortRooms(rooms)
   const logout = async () => {
-    await api('/api/auth/logout', { method: 'POST' })
+    await authClient.signOut()
     await navigate({ to: '/login' })
   }
 
@@ -190,6 +191,7 @@ function AppShellContent({ currentRoomId, currentUser, bots, users, home = false
                 <p className="truncate text-xs text-fg-muted">{currentUser.email}</p>
               </div>
               <DropdownMenuSeparator />
+              <Link to="/security" className="flex w-full items-center rounded-md px-2.5 py-2 text-sm hover:bg-surface-3">Security</Link>
               <button type="button" onClick={() => void logout()} className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm hover:bg-surface-3"><LogOut size={15} />Log out</button>
             </DropdownMenuContent>
           </DropdownMenu>

@@ -1,9 +1,10 @@
 import { useState, type FormEvent } from 'react'
 import type { Automation } from '@openstaff/shared'
 import type { RoomView } from '../../lib/loaders'
-import { api } from '../../lib/api'
+import { ApiError, api } from '../../lib/api'
 import type { AutomationTemplate } from '../../lib/automation-templates'
 import { buttonClass, ErrorText, inputClass } from '../settings/common'
+import { usePlan } from '../../hooks/usePlan'
 
 const cronPresets = [
   { label: 'Hourly', value: '0 * * * *' }, { label: 'Daily 09:00', value: '0 9 * * *' }, { label: 'Weekdays 09:00', value: '0 9 * * 1-5' }, { label: 'Weekly Mon 09:00', value: '0 9 * * 1' },
@@ -12,6 +13,7 @@ const cronPresets = [
 export interface AutomationMutationResult { automation: Automation; webhookKey?: string; webhookUrl?: string }
 
 export function AutomationForm({ room, automation, template, onSaved, onCancel }: { room: RoomView; automation?: Automation; template?: AutomationTemplate; onSaved: (result: AutomationMutationResult) => void; onCancel: () => void }) {
+  const { billingUrl } = usePlan()
   const bots = room.members.filter((member) => member.memberKind === 'bot')
   const initialTrigger = automation?.trigger ?? template?.trigger ?? 'schedule'
   const initialCron = automation?.cron ?? template?.cron ?? '0 9 * * *'
@@ -25,15 +27,15 @@ export function AutomationForm({ room, automation, template, onSaved, onCancel }
   const [overlap, setOverlap] = useState<'skip' | 'queue'>(automation?.overlap ?? template?.overlap ?? 'skip')
   const [catchUp, setCatchUp] = useState(automation?.catchUp ?? false)
   const [enabled, setEnabled] = useState(automation?.enabled ?? true)
-  const [busy, setBusy] = useState(false), [error, setError] = useState('')
+  const [busy, setBusy] = useState(false), [error, setError] = useState(''), [errorCode, setErrorCode] = useState<string>()
   const toggleBot = (id: string) => setTargetBotIds((current) => current.includes(id) ? current.filter((item) => item !== id) : current.length < 5 ? [...current, id] : current)
   const submit = async (event: FormEvent) => {
-    event.preventDefault(); setBusy(true); setError('')
+    event.preventDefault(); setBusy(true); setError(''); setErrorCode(undefined)
     try {
       const body = { name, cron: trigger === 'schedule' ? cron : null, timezone, prompt, roomId: room.id, targetBotIds, overlap, catchUp, enabled, ...(!automation ? { trigger } : {}) }
       const result = await api<AutomationMutationResult>(automation ? `/api/automations/${automation.id}` : '/api/automations', { method: automation ? 'PATCH' : 'POST', body: JSON.stringify(body) })
       onSaved(result)
-    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Request failed') } finally { setBusy(false) }
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Request failed'); setErrorCode(reason instanceof ApiError ? reason.code : undefined) } finally { setBusy(false) }
   }
   const labelClass = 'block text-xs font-medium text-fg-muted'
   return <form onSubmit={submit} className="mt-3 space-y-3 rounded-md border border-line bg-surface-3 p-4">
@@ -46,6 +48,6 @@ export function AutomationForm({ room, automation, template, onSaved, onCancel }
     <label className={labelClass}>Overlap<select value={overlap} onChange={(event) => setOverlap(event.target.value as 'skip' | 'queue')} className={inputClass}><option value="skip">Skip when busy</option><option value="queue">Queue behind current work</option></select></label>
     {trigger === 'schedule' && <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={catchUp} onChange={(event) => setCatchUp(event.target.checked)} />Catch up a missed run after a restart</label>}
     <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} />Enabled</label>
-    <button disabled={busy || targetBotIds.length < 1 || targetBotIds.length > 5} className={`${buttonClass} w-full`}>{busy ? 'Saving…' : 'Save automation'}</button><ErrorText error={error} />
+    <button disabled={busy || targetBotIds.length < 1 || targetBotIds.length > 5} className={`${buttonClass} w-full`}>{busy ? 'Saving…' : 'Save automation'}</button><ErrorText error={error} />{errorCode === 'plan_limit' && billingUrl && <a href={billingUrl} className="inline-block text-xs font-medium underline underline-offset-2">Upgrade</a>}
   </form>
 }

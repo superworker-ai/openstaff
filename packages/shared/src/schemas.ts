@@ -22,7 +22,12 @@ export const userSchema = z.object({
   email: z.email(),
   name: z.string(),
   avatar: z.string().nullable(),
-  role: z.enum(['owner', 'member']),
+  role: z.enum(['owner', 'admin', 'member']),
+  emailVerified: z.boolean(),
+  twoFactorEnabled: z.boolean(),
+  banned: z.boolean().optional(),
+  banReason: z.string().nullable().optional(),
+  banExpires: isoDateSchema.nullable().optional(),
   createdAt: isoDateSchema,
 })
 

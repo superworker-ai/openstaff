@@ -18,7 +18,7 @@ describe('automation webhook ingress', () => {
       return { response, data: await response.json() as Record<string, any> }
     }
     try {
-      const signup = await authenticated('/api/auth/signup', 'POST', { name: 'Owner', email: 'owner@example.com', password: 'password123' })
+      const signup = await authenticated('/api/auth/sign-up/email', 'POST', { name: 'Owner', email: 'owner@example.com', password: 'password123' })
       cookie = signup.response.headers.get('set-cookie')!.split(';')[0]!
       const bot = await authenticated('/api/bots', 'POST', { name: 'Drake', job: 'Engineer', avatar: { shape: 'circle', color: '#2E90FA' } })
       const created = await authenticated('/api/automations', 'POST', { name: 'Hook', trigger: 'webhook', cron: null, prompt: 'Inspect payload', targetBotIds: [bot.data.bot.id], roomId: bot.data.room.id, overlap: 'queue' })

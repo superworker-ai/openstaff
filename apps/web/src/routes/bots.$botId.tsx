@@ -2,6 +2,7 @@ import { createFileRoute, redirect } from '@tanstack/react-router'
 import { AppShell } from '../components/AppShell'
 import { AgentDocumentBuilder } from '../components/agent-builder/AgentDocumentBuilder'
 import { loadAppShell, loadBot, loadBotTemplates, loadMe } from '../lib/loaders'
+import { authRedirect } from '../lib/api-error'
 
 export const Route = createFileRoute('/bots/$botId')({
   loader: async ({ params }) => {
@@ -13,8 +14,8 @@ export const Route = createFileRoute('/bots/$botId')({
         loadBot({ data: { botId: params.botId } }),
       ])
       return { ...me, ...templates, ...shell, ...result }
-    } catch {
-      throw redirect({ to: '/login' })
+    } catch (reason) {
+      throw redirect({ to: authRedirect(reason) })
     }
   },
   component: EditBotPage,

@@ -16,7 +16,8 @@ import { AvatarBuilder } from '../AvatarBuilder'
 import { BotAvatar } from '../BotAvatar'
 import { Dialog, DialogClose, DialogContent, DialogTitle } from '../ui/dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu'
-import { api } from '../../lib/api'
+import { ApiError, api } from '../../lib/api'
+import { usePlan } from '../../hooks/usePlan'
 import type { BotTemplate, RoomData, RoomView } from '../../lib/loaders'
 import { MODEL_GROUPS } from '../../lib/models'
 import {
@@ -98,6 +99,7 @@ function findBotRoom(rooms: readonly RoomView[], botId: string): RoomView | unde
 
 export function AgentDocumentBuilder(props: AgentDocumentBuilderProps) {
   const { templates, userId } = props
+  const { billingUrl } = usePlan()
   const editingBot = props.mode === 'edit' ? props.bot : null
   const editing = editingBot !== null
   const navigate = useNavigate()
@@ -130,6 +132,7 @@ export function AgentDocumentBuilder(props: AgentDocumentBuilderProps) {
   const submitting = useRef(false)
   const submissionSucceeded = useRef(false)
   const [error, setError] = useState('')
+  const [errorCode, setErrorCode] = useState<string>()
   const errorRef = useRef<HTMLParagraphElement>(null)
   const editorRef = useRef<AgentRichTextEditorHandle>(null)
 
@@ -309,6 +312,7 @@ export function AgentDocumentBuilder(props: AgentDocumentBuilderProps) {
     setStorageBlocked(false)
     setStorageStatus('Local draft')
     setError('')
+    setErrorCode(undefined)
     if (editingBot) {
       const next = createAgentDocumentForBot(editingBot, templates, draft.cover)
       originalInstructions.current = editingBot.instructions
@@ -375,6 +379,7 @@ export function AgentDocumentBuilder(props: AgentDocumentBuilderProps) {
 
     setPending(true)
     setError('')
+    setErrorCode(undefined)
 
     if (editingBot) {
       let updated: Bot
@@ -436,6 +441,7 @@ export function AgentDocumentBuilder(props: AgentDocumentBuilderProps) {
       } catch { /* Cover persistence is optional. */ }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Could not create agent. Your draft is still here.')
+      setErrorCode(reason instanceof ApiError ? reason.code : undefined)
       submitting.current = false
       setPending(false)
       requestAnimationFrame(() => errorRef.current?.focus())
@@ -599,6 +605,7 @@ export function AgentDocumentBuilder(props: AgentDocumentBuilderProps) {
 
           {error && <div className="agent-document-error">
             <p ref={errorRef} tabIndex={-1} role="alert">{error}</p>
+            {!editing && errorCode === 'plan_limit' && billingUrl && <a href={billingUrl}>Upgrade</a>}
             {storageBlocked && <button type="button" onClick={startFreshDraft}>{editing ? 'Load current agent' : 'Start a fresh draft'}</button>}
           </div>}
           <footer className="agent-document-footer">
