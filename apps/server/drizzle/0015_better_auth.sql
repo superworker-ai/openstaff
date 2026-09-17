@@ -57,6 +57,8 @@ CREATE INDEX `sessions_user_idx` ON `sessions` (`user_id`);
 --> statement-breakpoint
 ALTER TABLE `users` DROP COLUMN `password_hash`;
 --> statement-breakpoint
+UPDATE `users` SET `role` = 'admin' WHERE `role` = 'owner' AND `id` <> (SELECT `id` FROM `users` WHERE `role` = 'owner' ORDER BY `created_at`, `id` LIMIT 1);
+--> statement-breakpoint
 CREATE UNIQUE INDEX `users_single_owner_idx` ON `users` ((`role` = 'owner')) WHERE `role` = 'owner';
 --> statement-breakpoint
 CREATE TABLE `verification` (
