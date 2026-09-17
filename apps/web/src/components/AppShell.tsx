@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
-import { Bot, Folder, GripVertical, Home, LogOut, MoreHorizontal, PanelLeft, Plus, Search, Settings, ShoppingBag, Users } from 'lucide-react'
-import type { Bot as BotType, User } from '@openstaff/shared'
+import { Bot, Folder, FolderInput, FolderPlus, GripVertical, Home, LogOut, MessageSquarePlus, MoreHorizontal, PanelLeft, Plus, Search, Settings, ShoppingBag, Users } from 'lucide-react'
+import { plainPreview, type Bot as BotType, type User } from '@openstaff/shared'
 import type { RoomView } from '../lib/loaders'
-import { api, formatTime } from '../lib/api'
+import { api } from '../lib/api'
 import { authClient } from '../lib/auth-client'
 import { sortRooms } from '../lib/room-order'
 import { responsivePaneOpen } from '../lib/responsive-pane'
 import { groupRoomsBySection, ROOM_SECTION_MAX_LENGTH } from '../lib/room-sections'
+import { listTime } from '../lib/time'
 import { BotAvatar, HumanAvatar } from './BotAvatar'
 import { BrandMark } from './BrandMark'
 import { BotWorkstation } from './BotWorkstation'
@@ -78,12 +79,13 @@ function AppShellContent({ currentRoomId, currentUser, bots, users, home = false
   const navigate = useNavigate()
   const { rooms, sectionNames, assignRoom, organizationBusy } = useRoomSections()
   const searchRef = useRef<HTMLInputElement>(null)
-  const newSectionTriggerRef = useRef<HTMLButtonElement>(null)
+  const createTriggerRef = useRef<HTMLButtonElement>(null)
   const roomDialogTriggerRef = useRef<HTMLButtonElement>(null)
   const [search, setSearch] = useState('')
   const [roomListOpen, setRoomListOpen] = useState(false)
   const [wideNavigation, setWideNavigation] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
+  const [createMenuInstant, setCreateMenuInstant] = useState(true)
   const [roomDialog, setRoomDialog] = useState<{ open: boolean; section: string | null; title: 'New room' | 'New group'; instant: boolean }>({ open: false, section: null, title: 'New group', instant: true })
   const [newSectionOpen, setNewSectionOpen] = useState(false)
   const [desktopDrag, setDesktopDrag] = useState(false)
@@ -169,8 +171,9 @@ function AppShellContent({ currentRoomId, currentUser, bots, users, home = false
         <div className="scrollbar-thin min-h-0 flex-1 space-y-1 overflow-y-auto px-2 max-[639px]:w-full max-[639px]:px-[2px]" role="list">
           {sorted.map((room) => {
             const name = roomName(room, bots), status = roomStatus(room, bots), active = currentRoomId === room.id
+            const preview = plainPreview(room.lastMessagePreview ?? '') || 'Start a conversation'
             return <div role="listitem" key={room.id}>
-              <Tooltip label={`${name} · ${room.lastMessagePreview || 'Start a conversation'}`}>
+              <Tooltip label={`${name} · ${preview}`}>
                 <Link aria-label={name} aria-current={active ? 'page' : undefined} to="/rooms/$roomId" params={{ roomId: room.id }} className={`relative grid h-10 w-10 place-items-center rounded-md max-[639px]:h-[44px] max-[639px]:w-[44px] ${active ? 'bg-surface-3' : 'hover:bg-surface-3'}`}>
                   {active && <span className="absolute -left-2 h-6 w-[3px] rounded-r-full bg-fg" />}
                   <span className="relative"><RoomAvatar room={room} bots={bots} size={34} /><StatusDot status={status} /></span>
@@ -201,28 +204,57 @@ function AppShellContent({ currentRoomId, currentUser, bots, users, home = false
       {roomListOpen && <button type="button" aria-label="Close room list" onClick={() => setListOpen(false)} className="fixed inset-y-0 left-16 right-0 z-30 hidden bg-overlay max-[899px]:block max-[639px]:left-[48px]" />}
       <aside aria-hidden={!roomListOpen} inert={!roomListOpen ? true : undefined} className={`relative z-40 min-h-0 max-w-[272px] overflow-hidden border-r border-line bg-app max-[899px]:fixed max-[899px]:inset-y-0 max-[899px]:left-16 max-[639px]:left-[48px] ${roomListOpen ? 'w-[272px] max-[639px]:w-[calc(100vw-48px)]' : 'w-0 border-r-0'}`}>
         <div className="flex h-full w-[272px] max-w-[calc(100vw-48px)] flex-col">
-          <div className="border-b border-line px-4 py-3">
-            <div className="mb-2">
-              <h2 className="min-h-7 text-sm font-semibold">Rooms</h2>
-              <div className="grid grid-cols-2 gap-1.5">
-                <button data-testid="new-room-trigger" type="button" onClick={(event) => openRoomDialog(null, 'New room', event.currentTarget, event.detail > 0)} className="new-room-button inline-flex h-7 min-w-0 items-center justify-center gap-1 rounded-md px-1.5 text-[11px] font-semibold text-fg-muted transition-[transform,background-color,color] duration-150 ease-out hover:bg-surface-3 hover:text-fg"><Plus size={13} />New room</button>
-                <button ref={newSectionTriggerRef} data-testid="new-section-trigger" type="button" disabled={organizationBusy} onClick={() => setNewSectionOpen(true)} className="new-section-button inline-flex h-7 min-w-0 items-center justify-center gap-1 rounded-md border border-line-strong bg-surface-2 px-2 text-[11px] font-semibold text-fg-muted transition-[transform,background-color,color,border-color] duration-150 ease-out hover:bg-surface-3 hover:text-fg"><Plus size={13} />New section</button>
-              </div>
+          <div className="border-b border-line px-3 pb-2 pt-3">
+            <div className="flex min-h-7 items-center justify-between gap-2">
+              <h2 className="text-[13px] font-semibold">Rooms</h2>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <span>
+                    <Tooltip label="New">
+                      <button
+                        ref={createTriggerRef}
+                        data-testid="rooms-create-trigger"
+                        type="button"
+                        aria-label="New"
+                        onPointerDown={() => setCreateMenuInstant(false)}
+                        onKeyDown={() => setCreateMenuInstant(true)}
+                        className="relative grid h-7 w-7 shrink-0 place-items-center rounded-md text-fg-muted transition-[color,background-color,transform] duration-150 ease-out hover:bg-surface-3 hover:text-fg active:scale-[.97]"
+                      ><Plus size={15} /></button>
+                    </Tooltip>
+                  </span>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  label="New"
+                  align="end"
+                  sideOffset={6}
+                  data-instant={createMenuInstant ? 'true' : undefined}
+                  onKeyDownCapture={() => setCreateMenuInstant(true)}
+                  onEscapeKeyDown={() => setCreateMenuInstant(true)}
+                >
+                  <DropdownMenuItem asChild className="text-[13px]"><Link to="/bots/new" data-testid="new-bot-trigger" onClick={() => setCreateMenuInstant(true)}><Bot size={15} />New bot</Link></DropdownMenuItem>
+                  <DropdownMenuItem data-testid="new-room-trigger" onSelect={() => openRoomDialog(null, 'New room', createTriggerRef.current ?? undefined, !createMenuInstant)} className="text-[13px]"><MessageSquarePlus size={15} />New room</DropdownMenuItem>
+                  <DropdownMenuItem data-testid="new-section-trigger" disabled={organizationBusy} onSelect={() => setNewSectionOpen(true)} className="text-[13px]"><FolderPlus size={15} />New section</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
-            <label className="flex h-8 items-center gap-2 rounded-md border border-line bg-surface-3 px-2.5 text-fg-muted">
-              <Search size={14} />
-              <input ref={searchRef} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search" aria-label="Search rooms" className="min-w-0 flex-1 bg-transparent text-sm text-fg outline-none placeholder:text-fg-subtle" />
+            <label className="mt-2 flex h-8 items-center gap-2 rounded-md border border-transparent bg-surface-3 px-2.5 text-fg-muted focus-within:border-line-strong">
+              <Search size={14} className="text-fg-subtle" />
+              <input ref={searchRef} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search rooms" aria-label="Search rooms" className="min-w-0 flex-1 bg-transparent text-[13px] text-fg outline-none placeholder:text-fg-subtle" />
             </label>
           </div>
           <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto p-2" role="list" data-dragging={draggingRoomId ? 'true' : 'false'}>
-            {sections.map((group, sectionIndex) => <section
+            {sections.map((group, sectionIndex) => {
+              const headingId = `room-section-${sectionIndex}`
+              const hideHeading = group.key === null && sections.length === 1
+              return <section
               key={group.key ? `section:${group.key}` : 'unsectioned'}
               data-testid="section-drop-target"
               data-section-name={group.key ?? ''}
               data-drop-active={dropSection === group.key ? 'true' : 'false'}
-              className="room-section-drop mb-3 rounded-lg p-1"
+              className="room-section-drop mb-2 rounded-lg p-0.5"
               role="group"
-              aria-labelledby={`room-section-${sectionIndex}`}
+              aria-label={hideHeading ? 'Rooms' : undefined}
+              aria-labelledby={hideHeading ? undefined : headingId}
               onDragEnter={(event) => { if (draggingRoomId && !organizationBusy) { event.preventDefault(); setDropSection(group.key) } }}
               onDragOver={(event) => { if (draggingRoomId && !organizationBusy) { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; setDropSection(group.key) } }}
               onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDropSection((current) => current === group.key ? undefined : current) }}
@@ -234,20 +266,21 @@ function AppShellContent({ currentRoomId, currentUser, bots, users, home = false
                 if (roomId && !organizationBusy) void assignRoom(roomId, group.key)
               }}
             >
-              <SectionHeading
-                id={`room-section-${sectionIndex}`}
+              {!hideHeading && <SectionHeading
+                id={headingId}
                 section={group.key}
                 name={group.name}
-                count={group.rooms.length}
                 onNewRoom={(trigger, openedByPointer) => openRoomDialog(group.key, 'New room', trigger, openedByPointer)}
-              />
+              />}
               {group.rooms.map((room) => {
                 const name = roomName(room, bots), active = currentRoomId === room.id, status = roomStatus(room, bots)
+                const preview = plainPreview(room.lastMessagePreview ?? '') || 'Start a conversation'
                 return <div
                   role="listitem"
                   key={room.id}
                   data-testid="room-section-row"
                   data-room-id={room.id}
+                  data-active={active ? 'true' : undefined}
                   draggable={desktopDrag && !organizationBusy}
                   onDragStart={(event) => {
                     if ((event.target as Element).closest('button')) { event.preventDefault(); return }
@@ -256,26 +289,28 @@ function AppShellContent({ currentRoomId, currentUser, bots, users, home = false
                     event.dataTransfer.setData('text/plain', room.id)
                   }}
                   onDragEnd={() => { setDraggingRoomId(null); setDropSection(undefined) }}
-                  className={`group mb-1 grid min-h-[52px] grid-cols-[16px_36px_minmax(0,1fr)_auto] items-center gap-2 rounded-md px-1 py-1 ${active ? 'bg-surface-3' : 'hover:bg-surface-3'}`}
+                  className="room-row group relative mb-0.5 grid min-h-[52px] grid-cols-[36px_minmax(0,1fr)_28px] items-center gap-2 rounded-md py-1 pl-4 pr-1"
                 >
                   <span
                     data-testid="room-drag-handle"
                     data-room-id={room.id}
                     aria-hidden="true"
-                    className="room-drag-handle grid h-8 place-items-center text-fg-subtle"
-                  ><GripVertical size={14} /></span>
+                    className="room-drag-handle absolute left-0.5 top-1/2 grid h-6 w-3 -translate-y-1/2 place-items-center text-fg-subtle"
+                  ><GripVertical size={12} /></span>
                   <Link draggable={false} aria-label={name} aria-current={active ? 'page' : undefined} to="/rooms/$roomId" params={{ roomId: room.id }} onClick={() => { if (window.innerWidth < 900) setListOpen(false) }} className="col-span-2 grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-2 rounded-md">
                     <span className="relative"><RoomAvatar room={room} bots={bots} size={36} /><StatusDot status={status} /></span>
                     <span className="min-w-0">
-                      <span className="flex items-center justify-between gap-2"><span className="truncate text-sm font-medium text-fg">{name}</span><time className="shrink-0 text-[11px] text-fg-subtle">{formatTime(room.lastMessageAt)}</time></span>
-                      <span className="block truncate text-xs text-fg-muted">{room.lastMessagePreview || 'Start a conversation'}</span>
+                      <span className="flex items-center justify-between gap-2"><span className="truncate text-[13px] font-medium text-fg">{name}</span><time dateTime={room.lastMessageAt ?? undefined} className="shrink-0 text-[11px] tabular-nums text-fg-subtle">{listTime(room.lastMessageAt)}</time></span>
+                      <span className="block truncate text-xs text-fg-muted">{preview}</span>
                     </span>
                   </Link>
-                  <SectionPicker roomId={room.id} align="end" restoreMovedRowFocus trigger={<button data-testid="sidebar-room-move" data-room-id={room.id} type="button" disabled={organizationBusy} className="sidebar-room-move h-8 rounded-md px-2 text-[11px] font-medium text-fg-muted opacity-70 hover:bg-surface-4 hover:text-fg hover:opacity-100 focus:opacity-100 group-focus-within:opacity-100">Move</button>} />
+                  <SectionPicker roomId={room.id} align="end" restoreMovedRowFocus trigger={<button data-testid="sidebar-room-move" data-room-id={room.id} type="button" disabled={organizationBusy} aria-label="Move to section" className="sidebar-room-move grid h-7 w-7 place-items-center rounded-md text-fg-subtle hover:bg-surface-4 hover:text-fg"><FolderInput size={15} /></button>} />
                 </div>
               })}
-              {group.rooms.length === 0 && <div className="room-section-empty mx-1 mb-1 grid min-h-10 place-items-center rounded-md border border-dashed border-line-strong px-2 text-[11px] text-fg-subtle">Drop rooms here</div>}
-            </section>)}
+              {group.rooms.length === 0 && (draggingRoomId
+                ? <div className="room-section-empty mx-1 mb-1 grid min-h-10 place-items-center rounded-md border border-dashed border-line-strong px-2 text-[11px] text-fg-subtle">Drop rooms here</div>
+                : <p className="px-2 pb-1.5 pt-0.5 text-[11px] text-fg-subtle">No rooms yet</p>)}
+            </section>})}
           </div>
         </div>
       </aside>
@@ -294,11 +329,11 @@ function AppShellContent({ currentRoomId, currentUser, bots, users, home = false
       onKeyboardClose={() => setRoomDialog((current) => ({ ...current, instant: true }))}
       onCreated={(roomId) => navigate({ to: '/rooms/$roomId', params: { roomId } })}
     />
-    <NewSectionDialog open={newSectionOpen} returnFocusRef={newSectionTriggerRef} onOpenChange={setNewSectionOpen} />
+    <NewSectionDialog open={newSectionOpen} returnFocusRef={createTriggerRef} onOpenChange={setNewSectionOpen} />
   </main>
 }
 
-function SectionHeading({ id, section, name, count, onNewRoom }: { id: string; section: string | null; name: string; count: number; onNewRoom: (trigger: HTMLButtonElement, openedByPointer: boolean) => void }) {
+function SectionHeading({ id, section, name, onNewRoom }: { id: string; section: string | null; name: string; onNewRoom: (trigger: HTMLButtonElement, openedByPointer: boolean) => void }) {
   const { renameSection, organizationBusy } = useRoomSections()
   const inputRef = useRef<HTMLInputElement>(null)
   const menuTriggerRef = useRef<HTMLButtonElement>(null)
@@ -318,8 +353,8 @@ function SectionHeading({ id, section, name, count, onNewRoom }: { id: string; s
     return () => cancelAnimationFrame(frame)
   }, [editing])
 
-  if (!section) return <h3 id={id} className="section-heading-row flex min-h-7 items-center gap-1.5 px-1.5 text-[11px] font-semibold text-fg-subtle">
-    <Folder size={13} className="shrink-0" /><span className="min-w-0 flex-1 truncate">{name}</span><span className="tabular-nums">{count}</span><span className="room-section-drop-label">Drop here</span>
+  if (!section) return <h3 id={id} className="section-heading-row flex min-h-7 items-center gap-1.5 px-2 text-[11px] font-semibold text-fg-subtle">
+    <span className="min-w-0 flex-1 truncate">{name}</span><span className="room-section-drop-label">Drop here</span>
   </h3>
 
   const restoreMenuFocus = (sectionName = section) => {
@@ -368,8 +403,7 @@ function SectionHeading({ id, section, name, count, onNewRoom }: { id: string; s
   }
 
   return <>
-    <h3 id={id} className="section-heading-row flex min-h-7 items-center gap-0.5 px-1.5 text-[11px] font-semibold text-fg-subtle">
-      <Folder size={13} className="mr-1 shrink-0" />
+    <h3 id={id} className="section-heading-row flex min-h-7 items-center gap-0.5 px-2 text-[11px] font-semibold text-fg-subtle">
       {editing
         ? <input
             ref={inputRef}
@@ -391,7 +425,6 @@ function SectionHeading({ id, section, name, count, onNewRoom }: { id: string; s
         : <span className="min-w-0 flex-1 truncate">{name}</span>}
       {pending && <span className="section-rename-pending text-[10px] font-medium text-fg-subtle">Renaming…</span>}
       {!editing && <>
-        <span className="mr-0.5 tabular-nums">{count}</span>
         <button
           data-testid="section-new-room"
           data-section-name={section}
@@ -399,7 +432,7 @@ function SectionHeading({ id, section, name, count, onNewRoom }: { id: string; s
           disabled={organizationBusy}
           onClick={(event) => onNewRoom(event.currentTarget, event.detail > 0)}
           aria-label={`New room in ${name}`}
-          className="section-heading-action grid h-7 w-7 shrink-0 place-items-center rounded-md text-fg-subtle hover:bg-surface-3 hover:text-fg"
+          className="section-heading-action grid h-6 w-6 shrink-0 place-items-center rounded-md text-fg-subtle hover:bg-surface-3 hover:text-fg"
         ><Plus size={13} /></button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -412,8 +445,8 @@ function SectionHeading({ id, section, name, count, onNewRoom }: { id: string; s
               aria-label={`Section options for ${name}`}
               onPointerDown={() => setMenuInstant(false)}
               onKeyDown={() => setMenuInstant(true)}
-              className="section-heading-action grid h-7 w-7 shrink-0 place-items-center rounded-md text-fg-subtle hover:bg-surface-3 hover:text-fg"
-            ><MoreHorizontal size={15} /></button>
+              className="section-heading-action grid h-6 w-6 shrink-0 place-items-center rounded-md text-fg-subtle hover:bg-surface-3 hover:text-fg"
+            ><MoreHorizontal size={14} /></button>
           </DropdownMenuTrigger>
           <DropdownMenuContent
             label={`${name} section actions`}

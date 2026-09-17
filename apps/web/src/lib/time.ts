@@ -6,6 +6,19 @@ function calendarDay(date: Date): number {
   return Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())
 }
 
+export function listTime(iso: string | null, now = new Date()): string {
+  if (!iso) return ''
+  const target = new Date(iso)
+  if (Number.isNaN(target.getTime()) || Number.isNaN(now.getTime())) return ''
+  const dayDelta = Math.round((calendarDay(target) - calendarDay(now)) / 86_400_000)
+
+  if (dayDelta === 0) return clockTime(target)
+  if (dayDelta === -1) return 'Yesterday'
+  if (dayDelta >= -6 && dayDelta <= -2) return new Intl.DateTimeFormat('en-US', { weekday: 'short' }).format(target)
+  if (target.getFullYear() === now.getFullYear()) return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(target)
+  return new Intl.DateTimeFormat('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' }).format(target)
+}
+
 export function relativeTime(iso: string, now: Date = new Date()): string {
   const target = new Date(iso)
   if (Number.isNaN(target.getTime()) || Number.isNaN(now.getTime())) return ''
