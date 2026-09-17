@@ -14,6 +14,7 @@ import { RealtimeHub } from './realtime/hub.js'
 import { AdmissionService } from './rooms/admission.js'
 import { AgentRuntime } from './agent/runtime.js'
 import { resolveModel, type ModelResolver } from './agent/models.js'
+import { replyDecisionExperimentFromEnv, type ReplyDecisionExperiment } from './agent/reply-decision.js'
 import { TurnScheduler } from './rooms/scheduler.js'
 import { requireAuth } from './auth/session.js'
 import { authRoutes } from './api/auth.js'
@@ -51,6 +52,7 @@ export interface CreateApplicationOptions {
   config?: Partial<Config>
   modelResolver?: ModelResolver
   workspaceStore?: WorkspaceStore
+  replyDecisionExperiment?: ReplyDecisionExperiment
 }
 
 export interface Application {
@@ -63,6 +65,7 @@ export interface Application {
 
 export async function createApplication(options: CreateApplicationOptions = {}): Promise<Application> {
   const config = readConfig(options.config)
+  const replyDecisionExperiment = options.replyDecisionExperiment ?? replyDecisionExperimentFromEnv(process.env, config.dataDir)
   const database = await createDatabase(config.dataDir, true, config.defaultModel)
   const secrets = await Secrets.open(config.dataDir)
   const store = options.workspaceStore ?? createWorkspaceStore(config.dataDir)
@@ -87,7 +90,7 @@ export async function createApplication(options: CreateApplicationOptions = {}):
   const modelResolver: ModelResolver = options.modelResolver ?? ((id, resolve) => resolveModel(id, keys, resolve))
   const compactor = new RoomCompactor(database.db, modelResolver, config.contextMessages)
   const browser = new BrowserService(config.dataDir, () => computer.desktop(), undefined, undefined, { lease })
-  const runtime = new AgentRuntime({ browser, db: database.db, computer, durable, admission, hub, registry, composio, automationService, contextMessages: config.contextMessages, modelResolver })
+  const runtime = new AgentRuntime({ browser, db: database.db, computer, durable, admission, hub, registry, composio, automationService, contextMessages: config.contextMessages, modelResolver, replyDecisionExperiment })
   const scheduler = new TurnScheduler(database.db, runtime, admission, hub, config.maxConcurrentTurns, compactor)
   admission.setTurnEnqueuer((newTurns) => scheduler.enqueue(newTurns))
   const dependencies: ApiDependencies = { db: database.db, config, computer, durable, lease, admission, scheduler, hub, secrets, keys, registry, installer, composio, automationService, modelResolver }
@@ -138,7 +141,7 @@ export async function createApplication(options: CreateApplicationOptions = {}):
   composio.start()
   const expiryTimer = setInterval(() => { void expireApprovals(database.db, hub, Date.now(), admission).catch(() => console.warn('Approval expiry failed')) }, 60_000)
   expiryTimer.unref()
-  return { app, config, database, dependencies, close: async () => { clearInterval(expiryTimer); composio.stop(); await connectionHealth.stop(); automationService.stop(); lease.close(); await scheduler.shutdown(); await compactor.close(); await browser.close(); await computer.close(); await registry.mcpPool.close(); hub.close(); database.close() } }
+  return { app, config, database, dependencies, close: async () => { clearInterval(expiryTimer); composio.stop(); await connectionHealth.stop(); automationService.stop(); lease.close(); await scheduler.shutdown(); await replyDecisionExperiment?.close(); await compactor.close(); await browser.close(); await computer.close(); await registry.mcpPool.close(); hub.close(); database.close() } }
 }
 
 export interface RunningServer extends Application {

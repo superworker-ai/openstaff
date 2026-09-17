@@ -16,6 +16,7 @@ import type { AdmissionService } from '../rooms/admission.js'
 import { toolApprovalFor } from './approval-policy.js'
 import { TurnEventRecorder } from './events.js'
 import { resolveModel, type ModelResolver } from './models.js'
+import type { ReplyDecisionExperiment } from './reply-decision.js'
 import { buildTurnPrompt } from './prompt.js'
 import { createAgentTools, type AgentToolContext } from './tools.js'
 import type { PluginRegistry } from '../plugins/registry.js'
@@ -91,6 +92,7 @@ export interface AgentRuntimeOptions {
   hub?: RealtimeHub
   contextMessages: number
   modelResolver?: ModelResolver
+  replyDecisionExperiment?: ReplyDecisionExperiment
 }
 
 export class AgentRuntime {
@@ -119,13 +121,23 @@ export class AgentRuntime {
     const recentReplies = (await Promise.all(replies.reverse().map(({ message }) => labelMessage(db, message)))).join('\n') || '(None yet.)'
     const timeout = AbortSignal.timeout(6_000)
     const combined = signal ? AbortSignal.any([signal, timeout]) : timeout
-    const result = await generateText({
-      model: this.modelResolver(process.env.REPLY_DECISION_MODEL || settings?.replyDecisionModel || turn.model, { sessionId: conversationId(turn) }),
-      output: Output.object({ schema: z.object({ reply: z.boolean(), reason: z.string() }) }),
-      abortSignal: combined,
-      prompt: `You are deciding whether ${bot.name}, whose job is "${bot.job}", should reply in this room. Reply only for a unique, material contribution: its lane, a correction, or a blocker. Return reply:false for agreement, acknowledgement, emoji-only replies, restating a teammate, or no useful contribution.\n\nLast 3 bot replies to this same trigger (author labeled):\n${recentReplies}\n\nRoom history:\n${history}`,
+    const modelId = process.env.REPLY_DECISION_MODEL || settings?.replyDecisionModel || turn.model
+    const baseline = async () => {
+      const result = await generateText({
+        model: this.modelResolver(modelId, { sessionId: conversationId(turn) }),
+        output: Output.object({ schema: z.object({ reply: z.boolean(), reason: z.string() }) }),
+        abortSignal: combined,
+        prompt: `You are deciding whether ${bot.name}, whose job is "${bot.job}", should reply in this room. Reply only for a unique, material contribution: its lane, a correction, or a blocker. Return reply:false for agreement, acknowledgement, emoji-only replies, restating a teammate, or no useful contribution.\n\nLast 3 bot replies to this same trigger (author labeled):\n${recentReplies}\n\nRoom history:\n${history}`,
+      })
+      return { reply: result.output.reply, model: modelId, usage: { inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens } }
+    }
+    if (!this.options.replyDecisionExperiment?.applies(turn.roomId)) return (await baseline()).reply
+    const trigger = (await db.select({ authorKind: messages.authorKind, text: messages.text }).from(messages).where(eq(messages.id, turn.triggerMessageId)).limit(1))[0]
+    if (!trigger) return (await baseline()).reply
+    return this.options.replyDecisionExperiment.compare({
+      roomId: turn.roomId, turnId: turn.id, botId: turn.botId,
+      state: { candidate: { name: bot.name, job: bot.job }, trigger, history, recentReplies }, signal, baseline,
     })
-    return result.output.reply
   }
 
   async run(turn: Turn, signal?: AbortSignal): Promise<RunResult> {
