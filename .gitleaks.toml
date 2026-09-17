@@ -10,4 +10,6 @@ regexes = [
   '''SECRETS_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef''',
   # The Computer healthcheck passes a shell variable to curl, not a literal password.
   '''curl -sf -u "viewer:\$\{COMPUTER_VIEWER_PASSWORD:\?\}"''',
+  # Throwaway RSA key that signs fake SAML assertions in the auth tests; the matching certificate is self-signed and trusts nothing else.
+  '''const samlPrivateKey = `-----BEGIN PRIVATE KEY-----''',
 ]
