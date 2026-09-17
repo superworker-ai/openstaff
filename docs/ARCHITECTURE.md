@@ -355,7 +355,11 @@ then `x-forwarded-proto`/`x-forwarded-host`, then the request URL, so a proxied 
 not build an `http://` postMessage target the `https://` opener would drop. Linking first
 deletes the toolkit's `INITIATED`, `FAILED`, and `EXPIRED` accounts (never `ACTIVE`), so
 repeated Reconnects stop accumulating accounts; saving a Composio key validates it with one
-listing and clears it on rejection.
+listing and clears it on rejection. Linking a toolkit with no existing auth config creates one:
+Composio-managed when the toolkit offers a managed scheme, otherwise a workspace-owned config
+for the toolkit's first non-OAuth scheme (API key, bearer, basic) with empty credentials, which
+makes Composio's hosted connect page collect the key from the person linking. A toolkit that
+only supports a custom OAuth client fails with a message pointing at the Composio dashboard.
 
 `POST /api/rooms/:id/connect { app }` resolves shared aliases, reuses a pending room
 connection request, or creates a system card and a non-model approval turn. Composer

@@ -1,4 +1,4 @@
-import { Composio } from '@composio/core'
+import { Composio, type AuthSchemeType, type CreateAuthConfigParams } from '@composio/core'
 
 export interface ComposioTool { slug: string; toolkit: string; description: string; tags?: string[]; version?: string }
 export interface ComposioConnection { id: string; toolkit: string; status: string; createdAt: string }
@@ -36,6 +36,16 @@ export function createComposioClient(apiKey: string, dataDir: string): ComposioC
   const sdk = new WorkspaceComposio({ apiKey, allowTracking: false, fileUploadDirs: false, fileDownloadDir: `${dataDir}/downloads` })
   const request = () => ({ signal: AbortSignal.timeout(20_000) })
   const normalize = (tool: { slug: string; description?: string; toolkit?: { slug: string }; tags?: string[]; version?: string }): ComposioTool => ({ slug: tool.slug, toolkit: tool.toolkit?.slug ?? tool.slug.split('_')[0]!.toLowerCase(), description: tool.description ?? '', tags: tool.tags, version: tool.version })
+  // Composio only ships managed OAuth for some toolkits. The rest (1Password, most API-key
+  // apps) need a workspace-owned auth config; with an empty credential set Composio's hosted
+  // connect page collects the key from the person linking, so the popup flow stays the same.
+  const authConfigParams = async (toolkit: string): Promise<CreateAuthConfigParams> => {
+    const info = await sdk.toolkits.get(toolkit, request())
+    if (info.composioManagedAuthSchemes?.length) return { type: 'use_composio_managed_auth' }
+    const scheme = info.authConfigDetails?.map((detail) => detail.mode).find((mode) => mode !== 'OAUTH2' && mode !== 'OAUTH1')
+    if (!scheme) throw new Error(`${info.name} needs your own OAuth client: create an auth config for it at platform.composio.dev, then connect again`)
+    return { type: 'use_custom_auth', authScheme: scheme as AuthSchemeType, credentials: {} }
+  }
   return {
     async connections() {
       const result: ComposioConnection[] = []
@@ -54,7 +64,7 @@ export function createComposioClient(apiKey: string, dataDir: string): ComposioC
     },
     async link(toolkit, callbackUrl) {
       const configs = await sdk.authConfigs.list({ toolkit, showDisabled: false }, request())
-      const auth = configs.items[0] ?? await sdk.authConfigs.create(toolkit, { type: 'use_composio_managed_auth' }, request())
+      const auth = configs.items[0] ?? await sdk.authConfigs.create(toolkit, await authConfigParams(toolkit), request())
       const result = await sdk.connectedAccounts.link('workspace', auth.id, { callbackUrl }, request())
       if (!result.redirectUrl) throw new Error('Composio did not provide a connection URL')
       return { redirectUrl: result.redirectUrl }
