@@ -44,7 +44,7 @@ export async function createDatabase(dataDir: string, runMigrations = true, defa
     computerDriver: 'local',
     defaultModel,
     replyDecisionModel: process.env.REPLY_DECISION_MODEL || null,
-    settings: {},
+    settings: { auth: { ssoOnly: false, requireTwoFactor: false } },
   }).onConflictDoNothing()
   return { db, client, close: () => client.close() }
 }

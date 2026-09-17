@@ -6,6 +6,16 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Added
 
+- SAML and OpenID Connect SSO with domain policy controls, Google, GitHub, and Microsoft
+  social login, authenticator two-factor with backup codes and trusted devices, workspace
+  security settings, member bans, session revocation, and atomic ownership transfer.
+- Better Auth password and magic-link authentication, configurable sign-up policies,
+  invitations, member roles, transactional email transports, and workspace audit history.
+  The session-table migration causes a one-time sign-out for every user on upgrade.
+  Workspaces that hold several legacy owners keep the earliest as owner; the others become
+  admins, because the workspace now has exactly one owner.
+- Environment-driven workspace plans and states, managed model keys, write-path entitlements,
+  Computer session metering, control-plane usage export, and an owner Usage settings page.
 - Freestyle VM and Vercel Sandbox Computer providers with persistent lifecycle, snapshots,
   scrubbed execution, jailed file APIs, credential validation, and gated contract coverage.
 - Expressive bot characters, persona creation and editing, idle personality actions, and a

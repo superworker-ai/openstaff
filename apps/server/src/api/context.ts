@@ -15,11 +15,17 @@ import type { ComputerLeaseService } from '../computer/lease.js'
 import type { DurableWorkspace } from '../storage/durable.js'
 import type { ModelResolver } from '../agent/models.js'
 import type { ReplyDecisionExperimentManager } from '../agent/reply-decision.js'
+import type { OpenStaffAuth } from '../auth/better-auth.js'
+import type { AuditWriter } from '../audit.js'
+import type { SendEmail } from '../email/index.js'
 
 export type AppEnv = { Variables: AppVariables }
 export type ApiApp = Hono<AppEnv>
 
 export interface ApiDependencies {
+  auth: OpenStaffAuth
+  audit: AuditWriter
+  sendEmail: SendEmail
   secrets: Secrets
   keys: KeyStore
   registry: PluginRegistry

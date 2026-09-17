@@ -2,7 +2,7 @@ import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { eq } from 'drizzle-orm'
-import { PROVIDERS, type Provider } from '@openstaff/shared'
+import { MODEL_PROVIDERS, PROVIDERS, type ModelProvider, type Provider } from '@openstaff/shared'
 import type { Database } from './db/index.js'
 import { providerKeys } from './db/schema.js'
 
@@ -39,18 +39,26 @@ export class Secrets {
 }
 
 const envNames: Record<Provider, string> = { xai: 'XAI_API_KEY', anthropic: 'ANTHROPIC_API_KEY', openai: 'OPENAI_API_KEY', opencode: 'OPENCODE_API_KEY', composio: 'COMPOSIO_API_KEY', aiGateway: 'AI_GATEWAY_API_KEY', typesafe: 'TYPESAFE_API_KEY' }
+/** A managed host supplies every model and Composio key from the environment; `typesafe` stays workspace-owned because the Jev experiment is opted into per workspace. */
+export const MANAGED_PROVIDERS: readonly ModelProvider[] = MODEL_PROVIDERS
 export class KeyStore {
   private readonly keys = new Map<Provider, string>()
-  constructor(private readonly db: Database, private readonly secrets: Secrets) {}
+  constructor(private readonly db: Database, private readonly secrets: Secrets, private readonly managedKeys = false) {}
   async load(): Promise<void> {
     this.keys.clear()
     for (const row of await this.db.select().from(providerKeys)) this.keys.set(row.provider, this.secrets.decrypt(row.encryptedKey))
   }
-  get(provider: Provider): string | undefined { return this.keys.get(provider) || process.env[envNames[provider]] || undefined }
+  get(provider: Provider): string | undefined {
+    if (this.managed(provider)) return process.env[envNames[provider]] || undefined
+    return this.keys.get(provider) || process.env[envNames[provider]] || undefined
+  }
   /** Distinguishes a saved key from the environment fallback without revealing either. */
   source(provider: Provider): 'settings' | 'env' | null {
-    if (this.keys.get(provider)) return 'settings'
+    if (!this.managed(provider) && this.keys.get(provider)) return 'settings'
     return process.env[envNames[provider]] ? 'env' : null
+  }
+  private managed(provider: Provider): boolean {
+    return this.managedKeys && (MANAGED_PROVIDERS as readonly Provider[]).includes(provider)
   }
   configured(): Record<Provider, boolean> { return Object.fromEntries(PROVIDERS.map((provider) => [provider, Boolean(this.get(provider))])) as Record<Provider, boolean> }
   async set(values: Partial<Record<Provider, string>>): Promise<void> {

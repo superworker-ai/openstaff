@@ -548,6 +548,16 @@ SQLite migrations are forward-only. Backups are online SQLite `VACUUM INTO` snap
 `secrets.key`; an S3 store can retain them beside workspace objects, while Litestream continuously
 replicates SQLite.
 
+### Hosted mode
+
+Hosted deployments set `WORKSPACE_PLAN`, `WORKSPACE_STATE`, `MANAGED_KEYS`,
+`CONTROL_PLANE_TOKEN`, and optional `PUBLIC_BILLING_URL`; their defaults preserve unrestricted
+self-hosted behavior. The suspended-state gate leaves health, readiness, plan, authentication,
+and control-plane usage export available while returning a payment-required response for other
+API and WebSocket traffic. `GET /api/usage/export` accepts only its bearer token and exports
+finished turns plus overlapping Computer sessions in a half-open time window, with stable
+turn pagination by finish time and ID.
+
 ## 14. Storage
 
 Workspace persistence has two independent layers. The durable store is authoritative for the

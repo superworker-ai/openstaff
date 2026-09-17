@@ -1,28 +1,55 @@
-import { useState } from 'react'
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { api } from '../lib/api'
-import { BrandMark } from '../components/BrandMark'
+import { useRef, useState, type FormEvent } from 'react'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
+import { AuthCard, AuthError, authButtonClass, authInputClass } from '../components/auth/AuthCard'
+import { authClient } from '../lib/auth-client'
+import { loadAuthConfig } from '../lib/loaders'
 
-export const Route = createFileRoute('/login')({ component: LoginPage })
+export const Route = createFileRoute('/login')({ loader: () => loadAuthConfig(), component: LoginPage })
 
 function LoginPage() {
-  const navigate = useNavigate()
-  const [signup, setSignup] = useState(false)
-  const [name, setName] = useState('')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [signupCode, setSignupCode] = useState('')
-  const [error, setError] = useState('')
-  const [busy, setBusy] = useState(false)
-  const submit = async (event: React.FormEvent) => {
-    event.preventDefault()
-    setBusy(true)
-    setError('')
-    try {
-      await api(`/api/auth/${signup ? 'signup' : 'login'}`, { method: 'POST', body: JSON.stringify(signup ? { name, email, password, signupCode: signupCode || undefined } : { email, password }) })
-      await navigate({ to: '/' })
-    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not sign in') } finally { setBusy(false) }
+  const config = Route.useLoaderData(), navigate = useNavigate()
+  const [email, setEmail] = useState(''), [password, setPassword] = useState(''), [signupCode, setSignupCode] = useState(''), [error, setError] = useState(''), [busy, setBusy] = useState(false), [sent, setSent] = useState(false), [ssoRequired, setSsoRequired] = useState(false), [ssoFound, setSsoFound] = useState(false)
+  const checkedEmail = useRef('')
+  const trySso = async () => {
+    const normalized = email.trim().toLowerCase()
+    if (!config.sso || !normalized) return false
+    setBusy(true); setError('')
+    const result = await authClient.signIn.sso({ email: normalized, callbackURL: '/', errorCallbackURL: '/login' })
+    setBusy(false)
+    if (result.error) {
+      const message = result.error.message ?? ''
+      if (result.error.status === 404 || /no sso provider|provider not found/i.test(message)) { setSsoFound(false); return false }
+      setError(message || 'Could not start single sign-on'); return true
+    }
+    setSsoFound(true)
+    if (result.data?.url) window.location.assign(result.data.url)
+    return true
   }
-  const input = 'w-full rounded-md border border-line-strong bg-surface-3 px-4 py-3 text-fg outline-none placeholder:text-fg-subtle focus:border-fg'
-  return <main className="grid min-h-screen place-items-center bg-app p-6 text-fg"><div className="w-full max-w-sm rounded-xl border border-line-strong bg-surface-2 p-8 shadow-card"><div className="mb-7 flex items-center gap-3"><span className="grid h-11 w-11 place-items-center text-fg"><BrandMark size={40} /></span><div><h1 className="text-xl font-semibold">OpenStaff</h1><p className="text-sm text-fg-muted">Your always-on teammates</p></div></div><div className="mb-5 grid grid-cols-2 rounded-md bg-surface-3 p-1"><button type="button" onClick={() => setSignup(false)} className={`rounded-sm py-2 ${!signup ? 'bg-surface-4 font-medium text-fg' : 'text-fg-muted'}`}>Log in</button><button type="button" onClick={() => setSignup(true)} className={`rounded-sm py-2 ${signup ? 'bg-surface-4 font-medium text-fg' : 'text-fg-muted'}`}>Sign up</button></div><form onSubmit={submit} className="space-y-3">{signup && <input required value={name} onChange={(event) => setName(event.target.value)} placeholder="Your name" className={input} />}<input required type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email" className={input} /><input required minLength={8} type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" className={input} />{signup && <input value={signupCode} onChange={(event) => setSignupCode(event.target.value)} placeholder="Signup code, if required" className={input} />}{error && <p className="text-sm text-danger">{error}</p>}<button disabled={busy} className="w-full rounded-md bg-accent py-3 font-medium text-accent-fg hover:opacity-90">{busy ? 'Please wait…' : signup ? 'Create workspace account' : 'Log in'}</button></form></div></main>
+  const discoverSso = async () => {
+    const normalized = email.trim().toLowerCase()
+    if (!normalized || normalized === checkedEmail.current) return
+    checkedEmail.current = normalized
+    await trySso()
+  }
+  const passwordLogin = async (event: FormEvent) => {
+    event.preventDefault(); setBusy(true); setError('')
+    if (await trySso()) return
+    setBusy(true)
+    const result = await authClient.signIn.email({ email, password })
+    setBusy(false)
+    if (result.error) {
+      if (result.error.code === 'sso_required') { setSsoRequired(true); setSsoFound(true); return setError('Your organisation requires single sign-on') }
+      return setError(result.error.message ?? 'Could not sign in')
+    }
+    await navigate({ to: '/' })
+  }
+  const magicLogin = async () => {
+    setBusy(true); setError('')
+    const result = await authClient.signIn.magicLink({ email, callbackURL: '/' }, signupCode ? { headers: { 'x-signup-code': signupCode } } : undefined)
+    setBusy(false)
+    if (result.error) return setError(result.error.message ?? 'Could not send the link')
+    setSent(true)
+  }
+  const signupAllowed = config.signup === 'open' || config.signup === 'code'
+  return <AuthCard title="Log in" subtitle="Welcome back to your workspace"><form onSubmit={passwordLogin} className="space-y-3"><input required type="email" autoComplete="email" value={email} onChange={(event) => { setEmail(event.target.value); setSsoRequired(false); setSsoFound(false); checkedEmail.current = '' }} onBlur={() => void discoverSso()} placeholder="Email" className={authInputClass} />{config.sso && (ssoFound || ssoRequired) && <button type="button" disabled={busy || !email} onClick={() => void trySso()} className={authButtonClass}>{busy ? 'Opening…' : 'Continue with single sign-on'}</button>}{!ssoRequired && <>{config.password && <><input required minLength={8} type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" className={authInputClass} /><button disabled={busy} className={authButtonClass}>{busy ? 'Please wait…' : 'Log in'}</button></>}{config.magicLink && <>{config.signup === 'code' && <input value={signupCode} onChange={(event) => setSignupCode(event.target.value)} placeholder="Signup code for a new account" className={authInputClass} />}<button type="button" disabled={busy || !email} onClick={() => void magicLogin()} className="w-full rounded-md border border-line-strong py-3 font-medium hover:bg-surface-3 disabled:opacity-50">Email me a sign-in link</button></>}{config.socialProviders.length > 0 && <div className="space-y-2 border-t border-line pt-3">{config.socialProviders.map((provider) => <button key={provider} type="button" disabled={busy} onClick={() => void authClient.signIn.social({ provider: provider as 'google' | 'github' | 'microsoft', callbackURL: '/' })} className="w-full rounded-md border border-line-strong py-3 font-medium capitalize hover:bg-surface-3">Continue with {provider}</button>)}</div>}</>}<AuthError message={error} />{sent && <p role="status" className="text-sm text-ok">Check your email for a sign-in link.</p>}</form>{!ssoRequired && <div className="mt-5 flex flex-wrap justify-between gap-3 text-sm">{config.password && <Link to="/forgot-password" className="text-fg-muted underline underline-offset-2">Forgot password?</Link>}{signupAllowed && <Link to="/signup" className="font-medium underline underline-offset-2">Create account</Link>}</div>}</AuthCard>
 }

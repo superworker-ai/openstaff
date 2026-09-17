@@ -20,11 +20,11 @@ async function assertRoute(h: Harness, pathname: string, heading: string) {
 async function signup(h: Harness) {
   await h.page.goto(`${h.url}/login`, { waitUntil: 'domcontentloaded' })
   await h.page.locator('body[data-hydrated="true"]').waitFor()
-  await h.page.getByRole('button', { name: 'Sign up', exact: true }).click()
+  await h.page.getByRole('link', { name: 'Create account', exact: true }).click()
   await h.page.getByPlaceholder('Your name').fill('Browser Owner')
   await h.page.getByPlaceholder('Email', { exact: true }).fill(email)
   await h.page.getByPlaceholder('Password', { exact: true }).fill(password)
-  await h.page.getByRole('button', { name: 'Create workspace account' }).click()
+  await h.page.getByRole('button', { name: 'Create account', exact: true }).click()
   await assertRoute(h, '/bots/new', 'Meet a future teammate')
 }
 
@@ -92,7 +92,7 @@ describe.skipIf(process.env.SKIP_BROWSER_TESTS === '1')('real browser UI flows',
     h.page.on('pageerror', (error) => errors.push(error.message))
     try {
       await signup(h)
-      expect((await readApi<{ user: User }>(h, '/auth/me')).user.role).toBe('owner')
+      expect((await readApi<{ user: User }>(h, '/auth/get-session')).user.role).toBe('owner')
       const roomPath = await createBot(h, 'Drake'), content = thread(h, 'Drake')
       const composer = h.page.getByPlaceholder('Message Drake', { exact: true })
       await composer.fill('hello'); await composer.press('Enter')
@@ -119,7 +119,7 @@ describe.skipIf(process.env.SKIP_BROWSER_TESTS === '1')('real browser UI flows',
 
       await h.page.getByRole('button', { name: 'Account menu' }).click()
       await h.page.getByRole('button', { name: 'Log out', exact: true }).click()
-      await assertRoute(h, '/login', 'OpenStaff')
+      await assertRoute(h, '/login', 'Log in')
       await h.page.getByPlaceholder('Email', { exact: true }).fill(email)
       await h.page.getByPlaceholder('Password', { exact: true }).fill(password)
       await h.page.locator('form').getByRole('button', { name: 'Log in', exact: true }).click()
@@ -212,7 +212,7 @@ describe.skipIf(process.env.SKIP_BROWSER_TESTS === '1')('real browser UI flows',
     h.page.on('pageerror', (error) => errors.push(error.message))
     try {
       await h.page.goto(`${h.url}/`, { waitUntil: 'domcontentloaded' })
-      await assertRoute(h, '/login', 'OpenStaff')
+      await assertRoute(h, '/login', 'Log in')
       await signup(h)
       expect((await readApi<{ rooms: unknown[] }>(h, '/rooms')).rooms).toEqual([])
       // A full navigation exercises the cookie-forwarding SSR loader, too.

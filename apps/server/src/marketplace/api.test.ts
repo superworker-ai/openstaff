@@ -20,7 +20,7 @@ it('serves authenticated cold pages without waiting for the catalog, then pagina
   vi.spyOn(running.dependencies.registry.oauth, 'list').mockResolvedValue([])
   try {
     expect((await running.app.request('/api/marketplace/apps')).status).toBe(401)
-    const signup = await running.app.request('/api/auth/signup', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Owner', email: 'market@example.com', password: 'password123' }) })
+    const signup = await running.app.request('/api/auth/sign-up/email', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Owner', email: 'market@example.com', password: 'password123' }) })
     const headers = { cookie: signup.headers.get('set-cookie')!.split(';')[0]! }
     const apps = async (params = '') => (await running.app.request(`/api/marketplace/apps${params}`, { headers })).json() as Promise<MarketplaceAppsPage>
     const cold = await apps()

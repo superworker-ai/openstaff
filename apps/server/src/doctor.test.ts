@@ -5,6 +5,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { runDoctor } from './doctor.js'
 import { createDatabase } from './db/index.js'
 import { S3Client } from '@aws-sdk/client-s3'
+import { computerCredentials } from './db/schema.js'
 
 afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks() })
 it('allows production startup to migrate a fresh volume, then reports current migrations', async () => {
@@ -32,5 +33,15 @@ it('makes S3 storage health hard in production without exposing credentials', as
     expect(result.ok).toBe(false)
     expect(storage).toMatchObject({ ok: false, hard: true, detail: 's3 bucket doctor-bucket unreachable' })
     expect(JSON.stringify(result)).not.toContain('secret-canary')
+  } finally { await fs.rm(root, { recursive: true, force: true }) }
+})
+it('ignores saved Computer credentials in managed mode', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sw-doctor-managed-'))
+  vi.stubEnv('DATA_DIR', root); vi.stubEnv('COMPUTER_DRIVER', 'e2b'); vi.stubEnv('MANAGED_KEYS', '1'); vi.stubEnv('E2B_API_KEY', '')
+  try {
+    const handle = await createDatabase(root)
+    await handle.db.insert(computerCredentials).values({ provider: 'e2b', encrypted: 'saved', updatedAt: new Date().toISOString() })
+    handle.close()
+    expect((await runDoctor()).results).toContainEqual({ name: 'E2B_CREDENTIALS', ok: false, hard: false, detail: 'missing' })
   } finally { await fs.rm(root, { recursive: true, force: true }) }
 })

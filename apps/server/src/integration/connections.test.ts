@@ -22,7 +22,7 @@ it.each(['request_connection'])('%s gates an unconnected toolkit and the verifie
   let cookie = ''
   const request = (route: string, body?: unknown) => fetch(`${api.url}/api${route}`, { method: body ? 'POST' : 'GET', headers: { cookie, 'content-type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}), redirect: 'manual' })
   try {
-    const signup = await request('/auth/signup', { name: 'Owner', email: 'owner@example.com', password: 'password123' })
+    const signup = await request('/auth/sign-up/email', { name: 'Owner', email: 'owner@example.com', password: 'password123' })
     cookie = signup.headers.get('set-cookie')!.split(';')[0]!
     const { room } = await (await request('/bots', { name: 'Mail bot', job: 'Mail', instructions: '', avatar: { shape: 'circle', color: '#2E90FA' }, approvalPolicy: 'auto' })).json() as { room: { id: string } }
     expect((await request(`/rooms/${room.id}/messages`, { text: 'Read Gmail', clientRequestId: 'connect-test' })).status).toBe(201)

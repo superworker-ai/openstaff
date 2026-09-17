@@ -18,7 +18,7 @@ describe('message admission', () => {
     handle = await createDatabase(directory)
     service = new AdmissionService(handle.db)
     const now = new Date().toISOString()
-    await handle.db.insert(users).values({ id: userId, email: 'a@example.com', name: 'A', passwordHash: 'x', avatar: null, role: 'owner', createdAt: now })
+    await handle.db.insert(users).values({ id: userId, email: 'a@example.com', name: 'A', avatar: null, role: 'owner', createdAt: new Date(now), updatedAt: new Date(now) })
     await handle.db.insert(rooms).values({ id: roomId, kind: 'dm', name: null, section: null, createdBy: userId, lastMessageAt: null, lastMessagePreview: null })
     const botId = createId('bot')
     await handle.db.insert(bots).values({ id: botId, slug: 'helper', name: 'Helper', avatar: { shape: 'circle', color: '#2E90FA' }, job: 'Help', instructions: '', model: null, reasoningEffort: null, approvalPolicy: 'auto', status: 'idle', createdBy: userId, createdAt: now })

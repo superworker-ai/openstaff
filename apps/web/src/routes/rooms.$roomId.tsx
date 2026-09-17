@@ -14,6 +14,7 @@ import { useRoomSocket } from '../hooks/useRoomSocket'
 import { api } from '../lib/api'
 import { loadMe, loadRoomData, type RoomData, type RoomView } from '../lib/loaders'
 import { responsivePaneOpen } from '../lib/responsive-pane'
+import { authRedirect } from '../lib/api-error'
 
 const SSR_LAYOUT_STORAGE = { getItem: () => null, setItem: () => undefined }
 
@@ -23,7 +24,7 @@ export const Route = createFileRoute('/rooms/$roomId')({
     try {
       const [data, me] = await Promise.all([loadRoomData({ data: { roomId: params.roomId } }), loadMe()])
       return { data, user: me.user }
-    } catch { throw redirect({ to: '/login' }) }
+    } catch (reason) { throw redirect({ to: authRedirect(reason) }) }
   },
   component: RoomPage,
 })

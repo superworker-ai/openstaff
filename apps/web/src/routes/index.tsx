@@ -8,14 +8,15 @@ import { HomePage } from '../components/home/HomePage'
 import { useRoomSocket } from '../hooks/useRoomSocket'
 import { api } from '../lib/api'
 import { loadHomeFeed, loadMe, loadRooms } from '../lib/loaders'
+import { authRedirect } from '../lib/api-error'
 
 export const Route = createFileRoute('/')({
   loader: async () => {
     let loaded: Awaited<ReturnType<typeof loadMe>>, roomList: Awaited<ReturnType<typeof loadRooms>>, feed: HomeFeed
     try {
       [loaded, roomList, feed] = await Promise.all([loadMe(), loadRooms(), loadHomeFeed()])
-    } catch {
-      throw redirect({ to: '/login' })
+    } catch (reason) {
+      throw redirect({ to: authRedirect(reason) })
     }
     if (feed.bots.length === 0) throw redirect({ to: '/bots/new' })
     const users = new Map<string, User>([[loaded.user.id, loaded.user]])

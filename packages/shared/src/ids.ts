@@ -3,6 +3,12 @@ import { ulid } from 'ulid'
 export const idPrefixes = {
   user: 'usr_',
   session: 'ses_',
+  account: 'acc_',
+  verification: 'ver_',
+  twoFactor: 'tfa_',
+  ssoProvider: 'sso_',
+  invitation: 'ivt_',
+  audit: 'aud_',
   bot: 'bot_',
   room: 'room_',
   message: 'msg_',
