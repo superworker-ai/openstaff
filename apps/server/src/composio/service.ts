@@ -20,7 +20,7 @@ export class ComposioService {
   private catalogTimer?: ReturnType<typeof setInterval>
   private readonly tools = new Map<string, ComposioTool>()
   private readonly expiredToolkits = new Set<string>()
-  constructor(private readonly db: Database, private readonly admission: AdmissionService, private readonly keys: Pick<KeyStore, 'get'>, private readonly dataDir: string, private readonly injected?: ComposioClient) {}
+  constructor(private readonly db: Database, private readonly admission: AdmissionService, private readonly keys: Pick<KeyStore, 'get'>, private readonly dataDir: string, private readonly injected?: ComposioClient, private readonly userId = 'workspace') {}
   configured(): boolean { return Boolean(this.injected || this.keys.get('composio')) }
   start() {
     this.refreshCatalog()
@@ -39,7 +39,7 @@ export class ComposioService {
     const key = this.keys.get('composio')
     if (!key) throw new Error('Configure a Composio API key in Settings to connect apps')
     if (!this.client || key !== this.currentKey) {
-      this.client = createComposioClient(key, this.dataDir); this.currentKey = key
+      this.client = createComposioClient(key, this.dataDir, this.userId); this.currentKey = key
       this.cache = undefined; this.catalog = undefined; this.tools.clear(); this.expiredToolkits.clear()
     }
     return this.client

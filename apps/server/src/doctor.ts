@@ -42,10 +42,10 @@ export async function runDoctor(): Promise<{ ok: boolean; results: Result[] }> {
     migrationCount = Number(migrations.rows[0]?.count ?? 0)
   } catch { /* A fresh or pre-migration database has no settings tables yet. */ }
   finally { client?.close() }
-  const hasModel = settingModels || modelEnvironment.some((name) => Boolean(process.env[name]))
+  const hasModel = (!config.managedKeys && settingModels) || modelEnvironment.some((name) => Boolean(process.env[name]))
   results.push({ name: 'MODEL_API_KEY', ok: hasModel, hard: production, detail: hasModel ? 'configured' : 'missing' })
   const provider = selected(process.env.COMPUTER_DRIVER || savedDriver)
-  const configured = credentials[provider].length === 0 || savedCredential || credentials[provider].every((name) => Boolean(process.env[name]))
+  const configured = credentials[provider].length === 0 || (!config.managedKeys && savedCredential) || credentials[provider].every((name) => Boolean(process.env[name]))
   results.push({ name: `${provider.toUpperCase()}_CREDENTIALS`, ok: configured, hard: production, detail: configured ? 'configured' : 'missing' })
   if (provider === 'docker') {
     try { await dockerClient().ping(); results.push({ name: 'DOCKER_HOST', ok: true, hard: true, detail: 'reachable' }) } catch { results.push({ name: 'DOCKER_HOST', ok: false, hard: true, detail: 'unreachable' }) }

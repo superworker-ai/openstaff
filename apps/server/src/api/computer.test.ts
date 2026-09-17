@@ -9,6 +9,7 @@ import type { AppEnv } from './context.js'
 import { ComputerLeaseService } from '../computer/lease.js'
 import type { RealtimeHub } from '../realtime/hub.js'
 import { signedIn } from '../test/auth.js'
+import { readConfig } from '../config.js'
 
 let f: Awaited<ReturnType<typeof computerFixture>>, app: Hono<AppEnv>
 let lease: ComputerLeaseService
@@ -34,7 +35,7 @@ beforeEach(async () => {
   memberId = member.user.id; memberCookie = member.cookie
   app = new Hono<AppEnv>()
   app.use('/api/*', requireAuth(f.auth, f.db))
-  app.route('/api/computer', computerRoutes({ computer: f.manager, lease }))
+  app.route('/api/computer', computerRoutes({ computer: f.manager, lease, config: readConfig({ dataDir: f.directory }) }))
 })
 afterEach(async () => { lease.close(); await f.cleanup(); vi.restoreAllMocks(); vi.unstubAllEnvs() })
 

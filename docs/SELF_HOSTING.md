@@ -8,7 +8,8 @@ New installations store SQLite data in `DATA_DIR/openstaff.db`. If an older inst
 has only `DATA_DIR/superworkers.db`, the server renames it to `openstaff.db` on first start.
 
 Self-hosters can ignore the hosted-mode variables. Their defaults select the unrestricted
-`self-hosted` plan with an active workspace, editable provider keys, and no usage export.
+`self-hosted` plan with an active workspace, editable provider keys and Computer credentials,
+and no usage export.
 
 Authentication also has development-friendly defaults: sign-up is open and the `console`
 email provider prints verification, password-reset, magic-link, and invitation URLs to

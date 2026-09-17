@@ -39,7 +39,7 @@ export class Secrets {
 }
 
 const envNames: Record<Provider, string> = { xai: 'XAI_API_KEY', anthropic: 'ANTHROPIC_API_KEY', openai: 'OPENAI_API_KEY', opencode: 'OPENCODE_API_KEY', composio: 'COMPOSIO_API_KEY', aiGateway: 'AI_GATEWAY_API_KEY' }
-export const MANAGED_MODEL_PROVIDERS = ['xai', 'anthropic', 'openai', 'aiGateway'] as const satisfies readonly Provider[]
+export const MANAGED_PROVIDERS = PROVIDERS
 export class KeyStore {
   private readonly keys = new Map<Provider, string>()
   constructor(private readonly db: Database, private readonly secrets: Secrets, private readonly managedKeys = false) {}
@@ -48,7 +48,7 @@ export class KeyStore {
     for (const row of await this.db.select().from(providerKeys)) this.keys.set(row.provider, this.secrets.decrypt(row.encryptedKey))
   }
   get(provider: Provider): string | undefined {
-    if (this.managedKeys && (MANAGED_MODEL_PROVIDERS as readonly Provider[]).includes(provider)) return process.env[envNames[provider]] || undefined
+    if (this.managedKeys && (MANAGED_PROVIDERS as readonly Provider[]).includes(provider)) return process.env[envNames[provider]] || undefined
     return this.keys.get(provider) || process.env[envNames[provider]] || undefined
   }
   configured(): Record<Provider, boolean> { return Object.fromEntries(PROVIDERS.map((provider) => [provider, Boolean(this.get(provider))])) as Record<Provider, boolean> }
