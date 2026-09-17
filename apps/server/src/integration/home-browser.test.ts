@@ -10,7 +10,7 @@ describe.skipIf(process.env.SKIP_BROWSER_TESTS === '1')('Home browser flow', () 
     const h = await browserHarness({ modelResolver: () => model }), errors: string[] = []
     h.page.on('pageerror', (error) => errors.push(error.message))
     try {
-      const signup = await h.context.request.post(`${h.url}/api/auth/signup`, { data: { name: 'Browser Owner', email: 'home-owner@example.test', password: 'browser-password123' } })
+      const signup = await h.context.request.post(`${h.url}/api/auth/sign-up/email`, { data: { name: 'Browser Owner', email: 'home-owner@example.test', password: 'browser-password123' } })
       expect(signup.ok()).toBe(true)
       const created = await h.context.request.post(`${h.url}/api/bots`, { data: { name: 'Drake', job: 'Researcher', instructions: 'Finish concise briefs.', avatar: { shape: 'circle', color: '#2E90FA' } } })
       expect(created.ok()).toBe(true)

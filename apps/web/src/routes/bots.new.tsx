@@ -1,6 +1,7 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
 import { AppShell } from '../components/AppShell'
 import { AgentDocumentBuilder } from '../components/agent-builder/AgentDocumentBuilder'
+import { authRedirect } from '../lib/api-error'
 import { loadAppShell, loadBotTemplates, loadMe } from '../lib/loaders'
 
 export const Route = createFileRoute('/bots/new')({
@@ -8,7 +9,7 @@ export const Route = createFileRoute('/bots/new')({
     try {
       const [me, templates, shell] = await Promise.all([loadMe(), loadBotTemplates(), loadAppShell()])
       return { ...me, ...templates, ...shell }
-    } catch { throw redirect({ to: '/login' }) }
+    } catch (reason) { throw redirect({ to: authRedirect(reason) }) }
   },
   component: NewBotPage,
 })

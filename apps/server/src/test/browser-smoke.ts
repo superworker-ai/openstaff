@@ -12,16 +12,16 @@ export async function browserSmoke(dataDir: string) {
   const pageUrl = `http://127.0.0.1:${(pageServer.address() as { port: number }).port}`
   const call = (name: string, input: unknown) => mockStream([{ type: 'stream-start', warnings: [] }, { type: 'tool-call', toolCallId: name, toolName: name, input: JSON.stringify(input) }, { type: 'finish', finishReason: { unified: 'tool-calls', raw: undefined }, usage: mockUsage }])
   const model = new MockLanguageModelV3({ doStream: [call('browser_navigate', { url: pageUrl }), call('browser_screenshot', {}), textStream('I captured the local page.')] })
-  const server = await startServer({ config: { dataDir, port: 0 }, modelResolver: () => model })
+  const server = await startServer({ config: { dataDir, port: 0, authSignup: 'open' }, modelResolver: () => model })
   let cookie = ''
   async function request(url: string, method = 'GET', body?: unknown) {
     const response = await fetch(`${server.url}${url}`, { method, headers: { cookie, 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) })
-    if (url.endsWith('/signup')) cookie = response.headers.get('set-cookie')!.split(';')[0]!
+    if (url.endsWith('/sign-up/email')) cookie = response.headers.get('set-cookie')!.split(';')[0]!
     if (!response.ok) throw new Error(`${url}: ${response.status}`)
     return response.json()
   }
   try {
-    await request('/api/auth/signup', 'POST', { name: 'Smoke Owner', email: 'browser@example.com', password: 'password123' })
+    await request('/api/auth/sign-up/email', 'POST', { name: 'Smoke Owner', email: 'browser@example.com', password: 'password123' })
     const computer = await request('/api/computer/status')
     if (computer.provider !== 'local') await request('/api/workspace', 'PATCH', { computerDriver: 'local' })
     const bot = await request('/api/bots', 'POST', { name: 'drake', job: 'Engineer', avatar: { shape: 'circle', color: '#2E90FA' }, approvalPolicy: 'auto' })
@@ -43,7 +43,7 @@ export async function browserSmoke(dataDir: string) {
     if (response.status !== 200 || response.headers.get('content-type') !== 'image/jpeg') throw new Error('Screenshot endpoint failed')
     if ((await fetch(`${server.url}${url}`)).status !== 401) throw new Error('Screenshot must require authentication')
     const file = path.join(dataDir, url.replace('/api/', '')), bytes = (await fs.stat(file)).size
-    const signup = await fetch(`${server.url}/api/auth/signup`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Other', email: 'other@example.com', password: 'password123' }) })
+    const signup = await fetch(`${server.url}/api/auth/sign-up/email`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Other', email: 'other@example.com', password: 'password123' }) })
     const other = signup.headers.get('set-cookie')!.split(';')[0]!
     if ((await fetch(`${server.url}${url}`, { headers: { cookie: other } })).status !== 404) throw new Error('Screenshot must require room membership')
     return { server: server.url, driver: (await request('/api/computer/status')).driver, turn: { id: turn.id, status: turn.status }, screenshot: screenshot.payload, screenshotCount: screenshots.length, file, bytes }

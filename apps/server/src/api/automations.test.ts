@@ -6,14 +6,14 @@ import { createApplication } from '../app.js'
 describe('automation API', () => {
   it('creates, reads, updates, runs, pages, cancels, and protects room automations', async () => {
     const directory = await fs.mkdtemp(path.resolve('data-test-automations-api-'))
-    const running = await createApplication({ config: { dataDir: directory, maxConcurrentTurns: 0, publicAppUrl: 'https://openstaff.example' }, automationClock: { now: () => new Date('2026-09-12T12:00:00.000Z'), schedule: () => ({ stop() {} }) } })
+    const running = await createApplication({ config: { dataDir: directory, maxConcurrentTurns: 0, authSignup: 'open', publicAppUrl: 'https://openstaff.example' }, automationClock: { now: () => new Date('2026-09-12T12:00:00.000Z'), schedule: () => ({ stop() {} }) } })
     let cookie = ''
     const request = async (url: string, method = 'GET', body?: unknown) => {
       const response = await running.app.request(url, { method, headers: { cookie, 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) })
       return { response, data: await response.json() as Record<string, any> }
     }
     try {
-      const signup = await request('/api/auth/signup', 'POST', { name: 'Owner', email: 'owner@example.com', password: 'password123' })
+      const signup = await request('/api/auth/sign-up/email', 'POST', { name: 'Owner', email: 'owner@example.com', password: 'password123' })
       cookie = signup.response.headers.get('set-cookie')!.split(';')[0]!
       const ownerCookie = cookie
       const bot = await request('/api/bots', 'POST', { name: 'Drake', job: 'Engineer', avatar: { shape: 'circle', color: '#2E90FA' } })
@@ -43,7 +43,7 @@ describe('automation API', () => {
       expect((await request(`/api/automations/${schedule.data.automation.id}/invocations?limit=20&before=${encodeURIComponent(before)}`)).data.invocations.length).toBeGreaterThan(0)
       const cancelled = await request(`/api/automations/${schedule.data.automation.id}/invocations/${manual.data.invocation.id}/cancel`, 'POST')
       expect(cancelled.data.cancelled).toBe(1)
-      const other = await request('/api/auth/signup', 'POST', { name: 'Other', email: 'other@example.com', password: 'password123' })
+      const other = await request('/api/auth/sign-up/email', 'POST', { name: 'Other', email: 'other@example.com', password: 'password123' })
       cookie = other.response.headers.get('set-cookie')!.split(';')[0]!
       expect((await request(`/api/automations/${schedule.data.automation.id}`)).response.status).toBe(404)
       expect((await request(`/api/automations?roomId=${bot.data.room.id}`)).response.status).toBe(404)

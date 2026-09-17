@@ -2,7 +2,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { browserHarness } from '../test/browser-harness.js'
+import { browserHarness, createAgent, signUp } from '../test/browser-harness.js'
 import { computerProvider, registerComputerProvider } from '../computer/registry.js'
 
 describe.skipIf(process.env.SKIP_BROWSER_TESTS === '1')('Computer Settings browser flow', () => {
@@ -13,16 +13,8 @@ describe.skipIf(process.env.SKIP_BROWSER_TESTS === '1')('Computer Settings brows
     vi.stubEnv('COMPUTER_DRIVER', '')
     const h = await browserHarness()
     try {
-      await h.page.goto(`${h.url}/login`, { waitUntil: 'domcontentloaded' })
-      await h.page.locator('body[data-hydrated="true"]').waitFor()
-      await h.page.getByRole('button', { name: 'Sign up', exact: true }).click()
-      await h.page.getByPlaceholder('Your name').fill('Computer Owner')
-      await h.page.getByPlaceholder('Email', { exact: true }).fill('computer-settings@example.test')
-      await h.page.getByPlaceholder('Password', { exact: true }).fill('browser-password123')
-      await h.page.getByRole('button', { name: 'Create workspace account' }).click()
-      await h.page.getByRole('button', { name: /Engineer/ }).click()
-      await h.page.getByPlaceholder('e.g. Drake').fill('Computer Bot')
-      await h.page.getByRole('button', { name: 'Create teammate' }).click()
+      await signUp(h, { name: 'Computer Owner', email: 'computer-settings@example.test' })
+      await createAgent(h, 'Computer Bot', { template: 'Engineer' })
       await h.page.getByRole('link', { name: 'Settings', exact: true }).click()
       await h.page.getByRole('heading', { name: 'Workspace settings', exact: true }).waitFor()
       await h.page.getByRole('link', { name: 'Computer', exact: true }).click()

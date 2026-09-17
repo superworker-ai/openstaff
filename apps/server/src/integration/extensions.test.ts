@@ -6,14 +6,14 @@ import { plugins, providerKeys, workspace } from '../db/schema.js'
 
 it('protects secrets, installs plugins, and authorizes automation mutations through HTTP', async () => {
   const directory = await fs.mkdtemp(path.resolve('data-test-api-'))
-  const running = await createApplication({ config: { dataDir: directory }, automationClock: { now: () => new Date(), schedule: () => ({ stop() {} }) } })
+  const running = await createApplication({ config: { dataDir: directory, authSignup: 'open' }, automationClock: { now: () => new Date(), schedule: () => ({ stop() {} }) } })
   let cookie = ''
   const request = async (url: string, method = 'GET', body?: unknown) => {
     const response = await running.app.request(url, { method, headers: { cookie, 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) })
     return { response, data: await response.json() }
   }
   try {
-    const signup = await request('/api/auth/signup', 'POST', { name: 'Owner', email: 'owner@example.com', password: 'password123' })
+    const signup = await request('/api/auth/sign-up/email', 'POST', { name: 'Owner', email: 'owner@example.com', password: 'password123' })
     cookie = signup.response.headers.get('set-cookie')!.split(';')[0]!
     const ownerCookie = cookie
     expect((await request('/api/workspace/provider-keys', 'PUT', { xai: 'canary-key' })).data).toMatchObject({ configured: { xai: true } })
@@ -37,7 +37,7 @@ it('protects secrets, installs plugins, and authorizes automation mutations thro
     const automation = await request('/api/automations', 'POST', { name: 'Check', trigger: 'schedule', cron: '* * * * *', prompt: 'hello', targetBotIds: [bot.bot.id], roomId: bot.room.id })
     expect(automation.response.status).toBe(201)
     expect((await request(`/api/automations/${automation.data.automation.id}`, 'PATCH', { enabled: false })).data.automation.enabled).toBe(false)
-    const other = await request('/api/auth/signup', 'POST', { name: 'Other', email: 'other@example.com', password: 'password123' })
+    const other = await request('/api/auth/sign-up/email', 'POST', { name: 'Other', email: 'other@example.com', password: 'password123' })
     cookie = other.response.headers.get('set-cookie')!.split(';')[0]!
     expect((await request('/api/workspace/provider-keys', 'PUT', { xai: 'forbidden' })).response.status).toBe(403)
     expect((await request(`/api/plugins/${id}`, 'DELETE')).response.status).toBe(403)
@@ -53,7 +53,7 @@ it('protects secrets, installs plugins, and authorizes automation mutations thro
 describe('/api/workspace/experimental', () => {
   it('stores the Jev experiment in settings, hides the key, and hot reloads the runtime', async () => {
     const directory = await fs.mkdtemp(path.resolve('data-test-experimental-'))
-    const running = await createApplication({ config: { dataDir: directory }, automationClock: { now: () => new Date(), schedule: () => ({ stop() {} }) } })
+    const running = await createApplication({ config: { dataDir: directory, authSignup: 'open' }, automationClock: { now: () => new Date(), schedule: () => ({ stop() {} }) } })
     let cookie = ''
     const request = async (url: string, method = 'GET', body?: unknown) => {
       const response = await running.app.request(url, { method, headers: { cookie, 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) })
@@ -61,10 +61,13 @@ describe('/api/workspace/experimental', () => {
     }
     const row = async () => (await running.database.db.select().from(workspace))[0]
     try {
-      const signup = await request('/api/auth/signup', 'POST', { name: 'Owner', email: 'owner@example.com', password: 'password123' })
+      const signup = await request('/api/auth/sign-up/email', 'POST', { name: 'Owner', email: 'owner@example.com', password: 'password123' })
       cookie = signup.response.headers.get('set-cookie')!.split(';')[0]!
       const ownerCookie = cookie
       const browserDefaults = { mode: 'off', model: 'jev-latest', timeoutMs: 2000, minConfidence: 0.35, roomIds: [] }
+      // Workspace security settings live beside the experiment in the same column, so every
+      // assertion below compares against the settings that exist before Jev is configured.
+      const baseSettings = ((await row())?.settings ?? {}) as Record<string, unknown>
 
       const defaults = await request('/api/workspace/experimental')
       expect(defaults.response.status).toBe(200)
@@ -77,7 +80,7 @@ describe('/api/workspace/experimental', () => {
       const keyless = await request('/api/workspace/experimental', 'PUT', { jev: { mode: 'shadow' } })
       expect(keyless.response.status).toBe(400)
       expect(keyless.data).toEqual({ error: 'A TypeSafe API key is required for shadow mode' })
-      expect((await row())?.settings).toEqual({})
+      expect((await row())?.settings).toEqual(baseSettings)
       expect((await request('/api/workspace/experimental')).data.jev.mode).toBe('off')
       expect(running.dependencies.replyDecisionManager.get()).toBeUndefined()
 
@@ -88,7 +91,7 @@ describe('/api/workspace/experimental', () => {
       expect(JSON.stringify((await request('/api/workspace/experimental')).data)).not.toContain('canary-typesafe')
       expect(JSON.stringify(await row())).not.toContain('canary-typesafe')
       expect(JSON.stringify(await running.database.db.select().from(providerKeys))).not.toContain('canary-typesafe')
-      expect((await row())?.settings).toEqual({ experimental: { jev: { mode: 'shadow', model: 'jev-1.13.0', timeoutMs: 900, roomIds: ['room_x'] }, jevBrowser: browserDefaults } })
+      expect((await row())?.settings).toEqual({ ...baseSettings, experimental: { jev: { mode: 'shadow', model: 'jev-1.13.0', timeoutMs: 900, roomIds: ['room_x'] }, jevBrowser: browserDefaults } })
       // Hot reload: the live runtime sees the new experiment without restarting the server.
       expect(running.dependencies.replyDecisionManager.get()?.applies('room_x')).toBe(true)
       expect(running.dependencies.replyDecisionManager.get()?.applies('room_other')).toBe(false)
@@ -97,11 +100,11 @@ describe('/api/workspace/experimental', () => {
       const keyOnly = await request('/api/workspace/experimental', 'PUT', { jev: { apiKey: 'canary-typesafe-2' } })
       expect(keyOnly.response.status).toBe(200)
       expect(keyOnly.data.jev).toMatchObject({ mode: 'shadow', model: 'jev-1.13.0', timeoutMs: 900, roomIds: ['room_x'], keyConfigured: true, keySource: 'settings' })
-      expect((await row())?.settings).toEqual({ experimental: { jev: { mode: 'shadow', model: 'jev-1.13.0', timeoutMs: 900, roomIds: ['room_x'] }, jevBrowser: browserDefaults } })
+      expect((await row())?.settings).toEqual({ ...baseSettings, experimental: { jev: { mode: 'shadow', model: 'jev-1.13.0', timeoutMs: 900, roomIds: ['room_x'] }, jevBrowser: browserDefaults } })
       const timeoutOnly = await request('/api/workspace/experimental', 'PUT', { jev: { timeoutMs: 2500 } })
       expect(timeoutOnly.response.status).toBe(200)
       expect(timeoutOnly.data.jev).toMatchObject({ mode: 'shadow', model: 'jev-1.13.0', timeoutMs: 2500, roomIds: ['room_x'] })
-      expect((await row())?.settings).toEqual({ experimental: { jev: { mode: 'shadow', model: 'jev-1.13.0', timeoutMs: 2500, roomIds: ['room_x'] }, jevBrowser: browserDefaults } })
+      expect((await row())?.settings).toEqual({ ...baseSettings, experimental: { jev: { mode: 'shadow', model: 'jev-1.13.0', timeoutMs: 2500, roomIds: ['room_x'] }, jevBrowser: browserDefaults } })
       expect(running.dependencies.replyDecisionManager.get()?.applies('room_x')).toBe(true)
       for (const canary of ['canary-typesafe', 'canary-typesafe-2']) {
         expect(JSON.stringify(keyOnly.data)).not.toContain(canary)
@@ -117,7 +120,7 @@ describe('/api/workspace/experimental', () => {
       expect(JSON.stringify((await request('/api/workspace/provider-keys')).data)).not.toContain('canary-typesafe')
       expect(JSON.stringify((await request('/api/workspace')).data)).not.toContain('canary-typesafe')
 
-      const other = await request('/api/auth/signup', 'POST', { name: 'Other', email: 'other@example.com', password: 'password123' })
+      const other = await request('/api/auth/sign-up/email', 'POST', { name: 'Other', email: 'other@example.com', password: 'password123' })
       cookie = other.response.headers.get('set-cookie')!.split(';')[0]!
       expect((await request('/api/workspace/experimental')).response.status).toBe(200)
       expect((await request('/api/workspace/experimental', 'PUT', { jev: { mode: 'off' } })).response.status).toBe(403)
@@ -133,7 +136,7 @@ describe('/api/workspace/experimental', () => {
 
   it('configures the browser action experiment from the same key without disturbing the reply experiment', async () => {
     const directory = await fs.mkdtemp(path.resolve('data-test-experimental-browser-'))
-    const running = await createApplication({ config: { dataDir: directory }, automationClock: { now: () => new Date(), schedule: () => ({ stop() {} }) } })
+    const running = await createApplication({ config: { dataDir: directory, authSignup: 'open' }, automationClock: { now: () => new Date(), schedule: () => ({ stop() {} }) } })
     let cookie = ''
     const request = async (url: string, method = 'GET', body?: unknown) => {
       const response = await running.app.request(url, { method, headers: { cookie, 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) })
@@ -141,16 +144,17 @@ describe('/api/workspace/experimental', () => {
     }
     const row = async () => (await running.database.db.select().from(workspace))[0]
     try {
-      const signup = await request('/api/auth/signup', 'POST', { name: 'Owner', email: 'owner@example.com', password: 'password123' })
+      const signup = await request('/api/auth/sign-up/email', 'POST', { name: 'Owner', email: 'owner@example.com', password: 'password123' })
       cookie = signup.response.headers.get('set-cookie')!.split(';')[0]!
       const ownerCookie = cookie
+      const baseSettings = ((await row())?.settings ?? {}) as Record<string, unknown>
       expect((await request('/api/workspace/experimental')).data.jevBrowser).toEqual({ mode: 'off', model: 'jev-latest', timeoutMs: 2000, minConfidence: 0.35, roomIds: [], observations: { count: 0, lastAt: null } })
       expect(running.dependencies.browserActionManager.get()).toBeUndefined()
 
       const keyless = await request('/api/workspace/experimental', 'PUT', { jevBrowser: { mode: 'shadow' } })
       expect(keyless.response.status).toBe(400)
       expect(keyless.data).toEqual({ error: 'A TypeSafe API key is required for shadow mode' })
-      expect((await row())?.settings).toEqual({})
+      expect((await row())?.settings).toEqual(baseSettings)
 
       const enabled = await request('/api/workspace/experimental', 'PUT', { jevBrowser: { mode: 'shadow', minConfidence: 0.5, timeoutMs: 2400, roomIds: ['room_b'] }, jev: { apiKey: 'canary-browser-key' } })
       expect(enabled.response.status).toBe(200)
@@ -166,7 +170,7 @@ describe('/api/workspace/experimental', () => {
       const replyOnly = await request('/api/workspace/experimental', 'PUT', { jev: { mode: 'shadow', roomIds: ['room_a'] } })
       expect(replyOnly.response.status).toBe(200)
       expect(replyOnly.data.jevBrowser).toMatchObject({ mode: 'shadow', timeoutMs: 2400, minConfidence: 0.5, roomIds: ['room_b'] })
-      expect((await row())?.settings).toEqual({ experimental: {
+      expect((await row())?.settings).toEqual({ ...baseSettings, experimental: {
         jev: { mode: 'shadow', model: 'jev-latest', timeoutMs: 1200, roomIds: ['room_a'] },
         jevBrowser: { mode: 'shadow', model: 'jev-latest', timeoutMs: 2400, minConfidence: 0.5, roomIds: ['room_b'] },
       } })
@@ -176,7 +180,7 @@ describe('/api/workspace/experimental', () => {
       expect((await request('/api/workspace/experimental', 'PUT', { jevBrowser: { minConfidence: 2 } })).response.status).toBe(400)
       expect((await request('/api/workspace/experimental', 'PUT', { jevBrowser: { mode: 'active' } })).response.status).toBe(400)
 
-      const other = await request('/api/auth/signup', 'POST', { name: 'Other', email: 'other@example.com', password: 'password123' })
+      const other = await request('/api/auth/sign-up/email', 'POST', { name: 'Other', email: 'other@example.com', password: 'password123' })
       cookie = other.response.headers.get('set-cookie')!.split(';')[0]!
       expect((await request('/api/workspace/experimental', 'PUT', { jevBrowser: { mode: 'off' } })).response.status).toBe(403)
       cookie = ownerCookie

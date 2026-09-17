@@ -8,14 +8,14 @@ import { buildTurnPrompt } from '../agent/prompt.js'
 it('uploads files with jailed paths, labels attachments, cancels once, and reports usage', async () => {
   const directory = await fs.mkdtemp(path.resolve('data-test-upload-'))
   const model = new MockLanguageModelV3({ doStream: (options) => new Promise((_resolve, reject) => { options.abortSignal?.throwIfAborted(); options.abortSignal?.addEventListener('abort', () => reject(new Error('Stopped')), { once: true }) }) })
-  const running = await createApplication({ config: { dataDir: directory }, modelResolver: () => model })
+  const running = await createApplication({ config: { dataDir: directory, authSignup: 'open' }, modelResolver: () => model })
   let cookie = ''
   const request = async (url: string, method = 'GET', body?: unknown) => {
     const response = await running.app.request(url, { method, headers: { cookie, ...(body instanceof FormData ? {} : { 'content-type': 'application/json' }) }, body: body instanceof FormData ? body : body === undefined ? undefined : JSON.stringify(body) })
     return { response, data: await response.json() }
   }
   try {
-    const signup = await request('/api/auth/signup', 'POST', { name: 'Owner', email: 'upload@example.com', password: 'password123' })
+    const signup = await request('/api/auth/sign-up/email', 'POST', { name: 'Owner', email: 'upload@example.com', password: 'password123' })
     cookie = signup.response.headers.get('set-cookie')!.split(';')[0]!
     const owner = cookie
     const writeThrough = vi.spyOn(running.dependencies.durable, 'writeThrough')
@@ -46,7 +46,7 @@ it('uploads files with jailed paths, labels attachments, cancels once, and repor
     const large = new FormData(); large.append('file', new File([new Uint8Array(20 * 1024 ** 2 + 1)], 'large'))
     expect((await request(`/api/rooms/${bot.room.id}/uploads`, 'POST', large)).response.status).toBe(413)
     expect(writeThrough).not.toHaveBeenCalled()
-    const other = await request('/api/auth/signup', 'POST', { name: 'Other', email: 'other-upload@example.com', password: 'password123' })
+    const other = await request('/api/auth/sign-up/email', 'POST', { name: 'Other', email: 'other-upload@example.com', password: 'password123' })
     cookie = other.response.headers.get('set-cookie')!.split(';')[0]!
     expect((await request(`/api/rooms/${bot.room.id}/uploads`, 'POST', form)).response.status).toBe(404)
     cookie = owner

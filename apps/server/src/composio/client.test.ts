@@ -3,15 +3,28 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const sdk = vi.hoisted(() => ({
   authConfigs: { list: vi.fn(), create: vi.fn(async () => ({ id: 'ac_new', authScheme: 'X', isComposioManaged: false, toolkit: 't' })) },
   toolkits: { get: vi.fn() },
-  connectedAccounts: { link: vi.fn(async () => ({ id: 'ca_1', status: 'INITIATED', redirectUrl: 'https://connect.example/link' })), list: vi.fn(), delete: vi.fn() },
+  tools: { execute: vi.fn(async () => ({ successful: true })) },
+  connectedAccounts: { link: vi.fn(async () => ({ id: 'ca_1', status: 'INITIATED', redirectUrl: 'https://connect.example/link' })), list: vi.fn(async () => ({ items: [], nextCursor: null })), delete: vi.fn() },
 }))
 vi.mock('@composio/core', () => ({ Composio: class { constructor() { Object.assign(this, sdk) } } }))
 
 import { createComposioClient } from './client.js'
 
+beforeEach(() => { vi.clearAllMocks(); sdk.authConfigs.list.mockResolvedValue({ items: [] }) })
+
+it('uses the configured user id for Composio account operations', async () => {
+  const client = createComposioClient('api-key', '/tmp/composio-test', 'tenant-slug')
+  sdk.authConfigs.list.mockResolvedValue({ items: [{ id: 'auth-config' }] })
+  await client.connections()
+  await client.execute('GITHUB_GET_REPOS', {})
+  await client.link('github')
+  expect(sdk.connectedAccounts.list).toHaveBeenCalledWith(expect.objectContaining({ userIds: ['tenant-slug'] }), expect.anything())
+  expect(sdk.tools.execute).toHaveBeenCalledWith('GITHUB_GET_REPOS', expect.objectContaining({ userId: 'tenant-slug' }), expect.anything())
+  expect(sdk.connectedAccounts.link).toHaveBeenCalledWith('tenant-slug', 'auth-config', { callbackUrl: undefined }, expect.anything())
+})
+
 describe('createComposioClient.link', () => {
-  const client = createComposioClient('key', '/tmp/composio-client-test')
-  beforeEach(() => { vi.clearAllMocks(); sdk.authConfigs.list.mockResolvedValue({ items: [] }) })
+  const client = createComposioClient('key', '/tmp/composio-client-test', 'workspace')
 
   it('reuses an existing auth config without asking Composio about the toolkit', async () => {
     sdk.authConfigs.list.mockResolvedValue({ items: [{ id: 'ac_existing' }] })

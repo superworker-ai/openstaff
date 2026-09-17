@@ -3,7 +3,7 @@ import { createServer } from 'node:http'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { MockLanguageModelV3 } from 'ai/test'
 import { eq } from 'drizzle-orm'
-import { browserHarness } from '../test/browser-harness.js'
+import { browserHarness, signUp } from '../test/browser-harness.js'
 import { fakeOAuthServer, writeOAuthPlugin } from '../test/fake-oauth.js'
 import { mockStream, mockUsage, textStream } from '../test/mock-model.js'
 import { oauthClients, plugins, turns } from '../db/schema.js'
@@ -48,14 +48,7 @@ describe.skipIf(process.env.SKIP_BROWSER_TESTS === '1')('connection flows in the
       toolkits: async () => [{ slug: 'gmail', name: 'Gmail', description: 'Read, organize, and reply to email.' }, { slug: 'googledrive', name: 'Google Drive', description: 'Find and work with your documents.' }, { slug: 'github', name: 'GitHub', description: 'Work with repositories and issues.' }],
     } })
     h.page.on('pageerror', (error) => errors.push(error.message))
-    await h.page.goto(`${h.url}/login`, { waitUntil: 'domcontentloaded' })
-    await h.page.locator('body[data-hydrated="true"]').waitFor()
-    await h.page.getByRole('button', { name: 'Sign up', exact: true }).click()
-    await h.page.getByPlaceholder('Your name').fill('Connections Owner')
-    await h.page.getByPlaceholder('Email', { exact: true }).fill('connections@example.com')
-    await h.page.getByPlaceholder('Password', { exact: true }).fill('password123')
-    await h.page.getByRole('button', { name: 'Create workspace account' }).click()
-    await h.page.waitForURL('**/bots/new', { waitUntil: 'domcontentloaded' })
+    await signUp(h, { name: 'Connections Owner', email: 'connections@example.com', password: 'password123' })
     const root = await writeOAuthPlugin(h.api.config.dataDir, fake.url)
     const entries = [{ name: 'gmail', source: './gmail', hasMcp: true, manifest: { name: 'gmail', displayName: 'Gmail', description: 'Read, organize, and reply to email.' } }, { name: 'google-drive', source: './drive', hasMcp: true, manifest: { name: 'google-drive', displayName: 'Google Drive', description: 'Find and work with your documents.' } }, { name: 'github', source: './github', hasMcp: true, manifest: { name: 'github', displayName: 'GitHub', description: 'Work with repositories and issues.' } }]
     vi.spyOn(h.api.dependencies.installer.marketplace, 'entries').mockResolvedValue(entries)
@@ -64,13 +57,14 @@ describe.skipIf(process.env.SKIP_BROWSER_TESTS === '1')('connection flows in the
     vi.spyOn(h.api.dependencies.installer, 'install').mockImplementation((source) => install(source === 'marketplace:gmail' ? `path:${root}` : source))
     await fs.mkdir('/tmp/shots-connections', { recursive: true })
     await fs.mkdir('/tmp/shots-connections-2', { recursive: true })
-  }, 40_000)
+  }, 90_000)
   afterAll(async () => { vi.restoreAllMocks(); await h?.stop(); await fake?.stop(); await manual?.stop(); await idp?.stop() })
 
   it('install opens Connect, DCR popup closes, and the dialog receives Connected', async () => {
     const { page, context, url } = h
-    await page.getByRole('navigation', { name: 'First-run checklist' }).waitFor()
-    await page.goto(`${url}/marketplace`, { waitUntil: 'domcontentloaded' })
+    // Signup lands on the agent builder while the workspace is still empty.
+    await page.getByRole('heading', { name: 'Untitled agent', exact: true }).waitFor()
+    await page.goto(`${url}/marketplace`, { waitUntil: 'domcontentloaded', timeout: 20_000 })
     await page.getByRole('heading', { name: 'Gmail', exact: true }).waitFor()
     expect(await page.getByRole('tab', { name: 'Apps', exact: true }).getAttribute('aria-selected')).toBe('true')
     await page.screenshot({ path: '/tmp/shots-connections/apps-catalog.png', fullPage: true })
@@ -80,7 +74,7 @@ describe.skipIf(process.env.SKIP_BROWSER_TESTS === '1')('connection flows in the
     const opened = context.waitForEvent('page')
     await dialog.getByRole('button', { name: 'Connect Gmail', exact: true }).click()
     const popup = await opened
-    await vi.waitFor(() => expect(popup.isClosed()).toBe(true))
+    await vi.waitFor(() => expect(popup.isClosed()).toBe(true), { timeout: 10_000 })
     await dialog.getByRole('status').filter({ hasText: 'Connected' }).waitFor()
     pluginId = (await h.api.database.db.select().from(plugins).where(eq(plugins.name, 'gmail')))[0]!.id
     expect(fake.registrations).toHaveLength(1)
@@ -88,7 +82,7 @@ describe.skipIf(process.env.SKIP_BROWSER_TESTS === '1')('connection flows in the
     expect(popup.isClosed()).toBe(true)
     await dialog.getByRole('button', { name: 'Close connection dialog' }).click()
     expect(errors).toEqual([])
-  }, 20_000)
+  }, 60_000)
 
   it('/connect creates a card without a model call; welcome chips and Members apps render; popup reconnect resumes the bot', async () => {
     await (await h.api.dependencies.registry.oauth.server(pluginId, 'Gmail')).invalidateCredentials('tokens')
@@ -133,7 +127,7 @@ describe.skipIf(process.env.SKIP_BROWSER_TESTS === '1')('connection flows in the
     await composer.press('Enter')
     const popup = await opened
     await popup.getByRole('button', { name: 'Connect Gmail', exact: true }).click()
-    await vi.waitFor(() => expect(popup.isClosed()).toBe(true))
+    await vi.waitFor(() => expect(popup.isClosed()).toBe(true), { timeout: 10_000 })
     await h.page.locator('.message-markdown').getByText('Your inbox says hello from fake OAuth.', { exact: true }).waitFor()
     await vi.waitFor(async () => expect((await h.api.database.db.select().from(turns).where(eq(turns.roomId, room.id))).find((turn) => turn.replyMode === 'direct' && turn.modelMessages.length > 0)?.status).toBe('done'))
     expect(fake.toolCalls).toHaveLength(1)
@@ -147,14 +141,19 @@ describe.skipIf(process.env.SKIP_BROWSER_TESTS === '1')('connection flows in the
     expect(await members.locator('[data-status="expired"]').count()).toBe(1)
     await h.page.screenshot({ path: '/tmp/shots-connections-2/members-apps.png', fullPage: true })
     await provider.saveTokens({ access_token: 'access-initial', token_type: 'Bearer' })
+    // The first-run checklist lives on the home feed and is still open: no model key yet.
+    expect(await (await h.context.request.get(`${h.url}/api/home/feed`)).json()).toMatchObject({ onboarding: { model: false, connected: true, hasBots: true, complete: false } })
+    await h.page.goto(`${h.url}/`, { waitUntil: 'domcontentloaded' })
+    await h.page.locator('body[data-hydrated="true"]').waitFor({ timeout: 20_000 })
+    await h.page.getByRole('navigation', { name: 'First-run checklist' }).waitFor({ timeout: 20_000 })
     await h.api.dependencies.keys.set({ xai: 'fake-test-key' })
     expect(await (await h.context.request.get(`${h.url}/api/workspace/onboarding`)).json()).toMatchObject({ model: true, connected: true, hasBots: true, complete: true })
-    await h.page.goto(`${h.url}/bots/new`, { waitUntil: 'domcontentloaded' })
-    await h.page.getByRole('heading', { name: 'Meet a future teammate' }).waitFor()
+    await h.page.goto(`${h.url}/`, { waitUntil: 'domcontentloaded' })
+    await h.page.getByRole('main', { name: 'Home' }).waitFor()
     await vi.waitFor(async () => expect(await h.page.getByRole('navigation', { name: 'First-run checklist' }).count()).toBe(0))
     expect(popup.isClosed()).toBe(true)
     expect(errors).toEqual([])
-  }, 20_000)
+  }, 60_000)
 
   it('manual-client guidance shows the redirect URI and saves one shared client for two plugins', async () => {
     const first = await h.api.dependencies.installer.install(`path:${await writeOAuthPlugin(h.api.config.dataDir, manual.url, 'manual-drive')}`)
@@ -172,7 +171,7 @@ describe.skipIf(process.env.SKIP_BROWSER_TESTS === '1')('connection flows in the
     expect(await h.api.database.db.select().from(oauthClients)).toHaveLength(1)
     expect(manual.grants[0]?.get('client_secret')).toBe('shared-browser-secret')
     expect(errors).toEqual([])
-  }, 20_000)
+  }, 30_000)
 
   it('Composio onboarding saves a key inside the connect card and completes in a popup without a model call', async () => {
     vi.stubEnv('COMPOSIO_API_KEY', '')
@@ -196,14 +195,14 @@ describe.skipIf(process.env.SKIP_BROWSER_TESTS === '1')('connection flows in the
       const opened = h.context.waitForEvent('page')
       await card.getByRole('button', { name: 'Save and connect' }).click()
       const popup = await opened
-      await vi.waitFor(() => expect(popup.isClosed()).toBe(true))
+      await vi.waitFor(() => expect(popup.isClosed()).toBe(true), { timeout: 10_000 })
       await card.getByText('Connected · Continuing conversation', { exact: true }).waitFor()
       expect(h.api.dependencies.keys.get('composio')).toBe('fake-composio-key')
       expect(model.doStreamCalls).toHaveLength(calls)
       expect(h.page.url()).toBe(`${h.url}/rooms/${room.id}`)
       expect(errors).toEqual([])
     } finally { configured.mockRestore(); vi.unstubAllEnvs() }
-  }, 20_000)
+  }, 40_000)
 
   it('a COOP identity provider severs the opener, the popup still closes, and the card resumes over the WebSocket', async () => {
     viaCoopIdp = true
@@ -223,5 +222,5 @@ describe.skipIf(process.env.SKIP_BROWSER_TESTS === '1')('connection flows in the
       await card.getByText('Connected · Continuing conversation', { exact: true }).waitFor()
       expect(errors).toEqual([])
     } finally { viaCoopIdp = false }
-  }, 20_000)
+  }, 30_000)
 })

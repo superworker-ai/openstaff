@@ -1,11 +1,12 @@
 import type { IncomingMessage } from 'node:http'
-import { and, eq, gt } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import type { Server as HttpServer } from 'node:http'
 import WebSocket, { WebSocketServer } from 'ws'
-import { clientWireMessageSchema, SESSION_COOKIE, type ComputerLease, type ServerWireMessage, type User } from '@openstaff/shared'
+import { clientWireMessageSchema, type ComputerLease, type ServerWireMessage, type User, type WorkspaceState } from '@openstaff/shared'
 import type { Database } from '../db/index.js'
-import { roomMembers, sessions, users } from '../db/schema.js'
-import { publicUser } from '../auth/session.js'
+import { roomMembers } from '../db/schema.js'
+import { needsTwoFactorEnrollment, publicUser } from '../auth/session.js'
+import type { OpenStaffAuth } from '../auth/better-auth.js'
 import { DESKTOP_PREFIX, desktopAuthorization, desktopStreamReady, desktopTarget, type DesktopMode } from '../api/computer-desktop.js'
 import { originAllowed } from '../api/origin.js'
 import type { DesktopEndpoints } from '../computer/types.js'
@@ -14,14 +15,6 @@ import type { ComputerLeaseSource } from '../computer/lease.js'
 interface ClientState {
   user: User
   roomIds: Set<string>
-}
-
-function parseCookies(header: string | undefined): Record<string, string> {
-  return Object.fromEntries((header ?? '').split(';').map((part) => {
-    const separator = part.indexOf('=')
-    if (separator < 0) return ['', '']
-    return [part.slice(0, separator).trim(), decodeURIComponent(part.slice(separator + 1).trim())]
-  }).filter(([key]) => key))
 }
 
 export class RealtimeHub {
@@ -33,7 +26,7 @@ export class RealtimeHub {
   private lease?: ComputerLeaseSource
   private unsubscribeLease?: () => void
 
-  constructor(private readonly db: Database, private readonly desktop?: () => Promise<DesktopEndpoints | null>, private readonly publicAppUrl?: string) {}
+  constructor(private readonly db: Database, private readonly auth: OpenStaffAuth, private readonly desktop?: () => Promise<DesktopEndpoints | null>, private readonly publicAppUrl?: string, private readonly workspaceState: WorkspaceState = 'active') {}
 
   setLease(lease: ComputerLeaseSource): void {
     this.unsubscribeLease?.()
@@ -50,19 +43,21 @@ export class RealtimeHub {
   attach(server: HttpServer): void {
     server.on('upgrade', async (request, socket, head) => {
       const url = new URL(request.url ?? '/', 'http://localhost')
+      if (this.workspaceState === 'suspended' && (url.pathname === '/ws' || url.pathname.startsWith('/api/'))) return this.rejectUpgrade(socket, 402, 'Workspace suspended', 'suspended')
       if (url.pathname === DESKTOP_PREFIX || url.pathname.startsWith(`${DESKTOP_PREFIX}/`)) {
         await this.upgradeDesktop(request, socket, head)
         return
       }
       if (url.pathname !== '/ws') return
-      const user = await this.authenticate(request)
-      if (!user) {
+      const authenticated = await this.authenticate(request)
+      if (!authenticated) {
         socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
         socket.destroy()
         return
       }
+      if (authenticated === 'two_factor_required') return this.rejectUpgrade(socket, 403, 'Two-factor authentication enrolment is required', 'two_factor_required')
       this.socketServer.handleUpgrade(request, socket, head, (webSocket) => {
-        this.connected(webSocket, request, user)
+        this.connected(webSocket, request, authenticated)
       })
     })
   }
@@ -79,14 +74,17 @@ export class RealtimeHub {
     return `${protocol}://${host}`
   }
 
-  private rejectUpgrade(socket: import('node:stream').Duplex, status: 401 | 403 | 409 | 429 | 503, reason: string) {
-    socket.write(`HTTP/1.1 ${status} ${reason}\r\nConnection: close\r\nContent-Type: application/json\r\n\r\n${JSON.stringify({ error: reason })}`)
+  private rejectUpgrade(socket: import('node:stream').Duplex, status: 401 | 402 | 403 | 409 | 429 | 503, reason: string, code?: string) {
+    const statusText = status === 402 ? 'Payment Required' : reason
+    socket.write(`HTTP/1.1 ${status} ${statusText}\r\nConnection: close\r\nContent-Type: application/json\r\n\r\n${JSON.stringify({ error: reason, ...(code ? { code } : {}) })}`)
     socket.destroy()
   }
 
   private async upgradeDesktop(request: IncomingMessage, socket: import('node:stream').Duplex, head: Buffer): Promise<void> {
-    const user = await this.authenticate(request)
-    if (!user) return this.rejectUpgrade(socket, 401, 'Authentication required')
+    const authenticated = await this.authenticate(request)
+    if (!authenticated) return this.rejectUpgrade(socket, 401, 'Authentication required')
+    if (authenticated === 'two_factor_required') return this.rejectUpgrade(socket, 403, 'Two-factor authentication enrolment is required', 'two_factor_required')
+    const user = authenticated
     const expectedOrigin = this.expectedOrigin(request) ?? 'http://localhost'
     if (!originAllowed(request.headers.origin, { publicAppUrl: this.publicAppUrl, headers: request.headers, requestUrl: new URL(request.url ?? '/', expectedOrigin).toString(), encrypted: Boolean((request.socket as { encrypted?: boolean }).encrypted) })) return this.rejectUpgrade(socket, 403, 'Origin not allowed')
     if (!this.desktop || this.desktopStreams.size + this.pendingDesktopStreams >= 4) return this.rejectUpgrade(socket, 429, 'Desktop stream limit reached')
@@ -145,14 +143,16 @@ export class RealtimeHub {
     finally { this.pendingDesktopStreams -= 1 }
   }
 
-  private async authenticate(request: IncomingMessage): Promise<User | null> {
-    const sessionId = parseCookies(request.headers.cookie)[SESSION_COOKIE]
-    if (!sessionId) return null
-    const row = (await this.db.select({ user: users }).from(sessions)
-      .innerJoin(users, eq(users.id, sessions.userId))
-      .where(and(eq(sessions.id, sessionId), gt(sessions.expiresAt, new Date().toISOString())))
-      .limit(1))[0]
-    return row ? publicUser(row.user) : null
+  private async authenticate(request: IncomingMessage): Promise<User | 'two_factor_required' | null> {
+    const headers = new Headers()
+    for (const [name, value] of Object.entries(request.headers)) {
+      if (Array.isArray(value)) for (const item of value) headers.append(name, item)
+      else if (value !== undefined) headers.set(name, value)
+    }
+    const session = await this.auth.api.getSession({ headers })
+    if (!session) return null
+    const user = publicUser(session.user)
+    return await needsTwoFactorEnrollment(this.db, user) ? 'two_factor_required' : user
   }
 
   private connected(socket: WebSocket, _request: IncomingMessage, user: User): void {

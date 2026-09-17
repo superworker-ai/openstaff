@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { expect, it } from 'vitest'
-import { browserHarness } from '../test/browser-harness.js'
+import { browserHarness, createAgent, signUp } from '../test/browser-harness.js'
 import { users } from '../db/schema.js'
 
 it.skipIf(process.env.SKIP_BROWSER_TESTS === '1')('takes and returns control through the live desktop panel', async () => {
@@ -22,16 +22,8 @@ it.skipIf(process.env.SKIP_BROWSER_TESTS === '1')('takes and returns control thr
       return route.fulfill({ json: lease })
     })
     await h.page.route('**/api/computer/desktop/**', (route) => route.fulfill({ contentType: 'text/html', body: '<style>body{background:#111;color:white;font:24px sans-serif;display:grid;place-items:center;height:100vh}</style><p>Live desktop</p>' }))
-    await h.page.goto(`${h.url}/login`, { waitUntil: 'domcontentloaded' })
-    await h.page.locator('body[data-hydrated="true"]').waitFor()
-    await h.page.getByRole('button', { name: 'Sign up', exact: true }).click()
-    await h.page.getByPlaceholder('Your name').fill('Desktop Owner')
-    await h.page.getByPlaceholder('Email', { exact: true }).fill('desktop-panel@example.test')
-    await h.page.getByPlaceholder('Password', { exact: true }).fill('browser-password123')
-    await h.page.getByRole('button', { name: 'Create workspace account' }).click()
-    await h.page.getByRole('button', { name: /Engineer/ }).click()
-    await h.page.getByPlaceholder('e.g. Drake').fill('Desktop Bot')
-    await h.page.getByRole('button', { name: 'Create teammate' }).click()
+    await signUp(h, { name: 'Desktop Owner', email: 'desktop-panel@example.test' })
+    await createAgent(h, 'Desktop Bot', { template: 'Engineer' })
     await h.page.getByPlaceholder('Message Desktop Bot', { exact: true }).fill('Show activity')
     await h.page.getByPlaceholder('Message Desktop Bot', { exact: true }).press('Enter')
     await h.page.getByTestId('thread').getByText('Hello from your teammate.', { exact: true }).waitFor()
@@ -78,16 +70,8 @@ it.skipIf(process.env.SKIP_BROWSER_TESTS === '1')('loads an external desktop ses
       lease = { ownerKind: 'human', ownerId: userId, ownerName: 'Desktop Owner', epoch, acquiredAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 15 * 60_000).toISOString(), reason: null }
       return route.fulfill({ json: lease })
     })
-    await h.page.goto(`${h.url}/login`, { waitUntil: 'domcontentloaded' })
-    await h.page.locator('body[data-hydrated="true"]').waitFor()
-    await h.page.getByRole('button', { name: 'Sign up', exact: true }).click()
-    await h.page.getByPlaceholder('Your name').fill('Desktop Owner')
-    await h.page.getByPlaceholder('Email', { exact: true }).fill('desktop-external@example.test')
-    await h.page.getByPlaceholder('Password', { exact: true }).fill('browser-password123')
-    await h.page.getByRole('button', { name: 'Create workspace account' }).click()
-    await h.page.getByRole('button', { name: /Engineer/ }).click()
-    await h.page.getByPlaceholder('e.g. Drake').fill('Desktop Bot')
-    await h.page.getByRole('button', { name: 'Create teammate' }).click()
+    await signUp(h, { name: 'Desktop Owner', email: 'desktop-external@example.test' })
+    await createAgent(h, 'Desktop Bot', { template: 'Engineer' })
     userId = (await h.api.dependencies.db.select({ id: users.id }).from(users))[0]!.id
     if (await h.page.getByRole('button', { name: 'Computer', exact: true }).getAttribute('aria-pressed') !== 'true') await h.page.getByRole('button', { name: 'Computer', exact: true }).click()
     const frame = h.page.getByTitle('Live Computer desktop')

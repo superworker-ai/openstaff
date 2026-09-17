@@ -17,7 +17,7 @@ async function request(application: Application, cookie: string, url: string, me
 }
 
 async function signup(application: Application, name: string, email: string): Promise<{ cookie: string; userId: string }> {
-  const result = await request(application, '', '/api/auth/signup', 'POST', { name, email, password: 'password123' })
+  const result = await request(application, '', '/api/auth/sign-up/email', 'POST', { name, email, password: 'password123' })
   return { cookie: result.response.headers.get('set-cookie')!.split(';')[0]!, userId: result.data.user.id }
 }
 
@@ -70,7 +70,7 @@ describe('room sections API', () => {
 
   it('unions both room kinds for members without exposing another user private labels', async () => {
     const directory = await fs.mkdtemp(path.resolve('data-test-room-section-visibility-'))
-    const application = await createApplication({ config: { dataDir: directory, maxConcurrentTurns: 0 } })
+    const application = await createApplication({ config: { dataDir: directory, maxConcurrentTurns: 0, authSignup: 'open' } })
     try {
       const owner = await signup(application, 'Owner', 'owner-visibility@example.test')
       const ownerFirst = await createBot(application, owner.cookie, 'Owner First')
@@ -171,7 +171,7 @@ describe('room sections API', () => {
 
   it('renames only caller-visible data and rejects collisions or missing sources', async () => {
     const directory = await fs.mkdtemp(path.resolve('data-test-room-section-rename-isolation-'))
-    const application = await createApplication({ config: { dataDir: directory, maxConcurrentTurns: 0 } })
+    const application = await createApplication({ config: { dataDir: directory, maxConcurrentTurns: 0, authSignup: 'open' } })
     try {
       const owner = await signup(application, 'Owner', 'owner-rename-isolation@example.test')
       const shared = await createBot(application, owner.cookie, 'Shared')

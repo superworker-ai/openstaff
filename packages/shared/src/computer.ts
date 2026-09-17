@@ -61,6 +61,7 @@ export interface ComputerProviderInfo {
   capabilities: ComputerCapabilities
   configured: boolean
   credentialSource: 'settings' | 'env' | null
+  managed: boolean
   fields: Array<{ name: string; label: string; secret: boolean; required: boolean; placeholder?: string }>
 }
 

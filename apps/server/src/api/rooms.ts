@@ -5,6 +5,7 @@ import { createId } from '@openstaff/shared'
 import { bots, messages, roomMembers, rooms, roomSections, turns, users } from '../db/schema.js'
 import { fileAttachmentSchema, validateAttachments } from './uploads.js'
 import { publicTurn } from '../db/public.js'
+import { publicUser } from '../auth/session.js'
 import type { AppEnv, ApiDependencies } from './context.js'
 import { isResponse, parseBody } from './helpers.js'
 
@@ -37,8 +38,8 @@ async function details(db: ApiDependencies['db'], room: typeof rooms.$inferSelec
   const botIds = members.filter((member) => member.memberKind === 'bot').map((member) => member.memberId)
   const userIds = members.filter((member) => member.memberKind === 'user').map((member) => member.memberId)
   const botRows = botIds.length ? await db.select().from(bots).where(inArray(bots.id, botIds)) : []
-  const userRows = userIds.length ? await db.select({ id: users.id, name: users.name, email: users.email, avatar: users.avatar, role: users.role, createdAt: users.createdAt }).from(users).where(inArray(users.id, userIds)) : []
-  return { ...room, members: members.map((member) => ({ ...member, entity: member.memberKind === 'bot' ? botRows.find((bot) => bot.id === member.memberId) : userRows.find((user) => user.id === member.memberId) })) }
+  const userRows = userIds.length ? await db.select().from(users).where(inArray(users.id, userIds)) : []
+  return { ...room, members: members.map((member) => ({ ...member, entity: member.memberKind === 'bot' ? botRows.find((bot) => bot.id === member.memberId) : (() => { const user = userRows.find((row) => row.id === member.memberId); return user ? publicUser(user) : undefined })() })) }
 }
 
 function normalizedSectionName(name: string): string {

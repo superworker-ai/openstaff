@@ -388,20 +388,21 @@ Composio connection state is revalidated at the execution gate and callback; dis
 deletes the connected account. Apps offers Composio sign-in and plugin installation together.
 
 **Experimental settings**: Settings → Experimental (sidebar group *Labs*, rendered last) holds
-unstable switches, currently the Jev reply-decision experiment. Its non-secret fields live in the
-`workspace.settings` JSON column as `{ experimental: { jev: { mode, model, timeoutMs, roomIds } } }`,
+unstable switches, currently the Jev reply-decision and browser-action experiments. Their non-secret
+fields live in the `workspace.settings` JSON column under `experimental.jev` and
+`experimental.jevBrowser`,
 parsed by `readExperimentalSettings` in `@openstaff/shared` with defaults on anything missing or
-malformed, so no migration is involved. Its credential is the `typesafe` provider key, encrypted in
+malformed, so no migration is involved. Their shared credential is the `typesafe` provider key, encrypted in
 `provider_keys` like every other key with `TYPESAFE_API_KEY` as the environment fallback; it is
 excluded from `MODEL_PROVIDERS`, so it never appears on the Providers page and `PUT
 /api/workspace/provider-keys` rejects it. `GET`/`PUT /api/workspace/experimental` are owner-gated for
 writes and never echo the key, reporting only `keyConfigured` and `keySource`. A
-`ReplyDecisionExperimentManager` owns the live instance: `PUT` persists the settings and then calls
-`configure`, which builds the replacement, swaps it in, and closes the previous instance so
-in-flight observations drain. `AgentRuntime` reads the experiment through a getter, so a swap takes
-effect on the next reply decision without a restart. A second, script-only Jev experiment lives in
-`apps/server/src/browser/jev-actions.ts` and is documented in `docs/JEV_COMPUTER_USE_EXPERIMENT.md`;
-it has no Settings surface and never runs inside a turn.
+`ReplyDecisionExperimentManager` and `BrowserActionExperimentManager` own the live instances: `PUT`
+persists the settings and reconfigures both, swapping replacements in place so changes take effect
+without a restart. Reply decisions can be observed before an optional turn, while browser-action
+shadow mode observes real browser mutations without delaying or changing them. A separate bounded
+browser-task comparison runs only through `apps/server/src/experiments/jev-computer-use.ts`; it is
+documented in `docs/JEV_COMPUTER_USE_EXPERIMENT.md` and never runs inside a turn.
 
 Phase 2 implementation notes:
 - Plugin variables and provider keys use AES-256-GCM with a random nonce for each value.
@@ -561,6 +562,16 @@ dependencies at `/ms-playwright`, installed before switching to the non-root use
 SQLite migrations are forward-only. Backups are online SQLite `VACUUM INTO` snapshots plus
 `secrets.key`; an S3 store can retain them beside workspace objects, while Litestream continuously
 replicates SQLite.
+
+### Hosted mode
+
+Hosted deployments set `WORKSPACE_PLAN`, `WORKSPACE_STATE`, `MANAGED_KEYS`,
+`CONTROL_PLANE_TOKEN`, and optional `PUBLIC_BILLING_URL`; their defaults preserve unrestricted
+self-hosted behavior. The suspended-state gate leaves health, readiness, plan, authentication,
+and control-plane usage export available while returning a payment-required response for other
+API and WebSocket traffic. `GET /api/usage/export` accepts only its bearer token and exports
+finished turns plus overlapping Computer sessions in a half-open time window, with stable
+turn pagination by finish time and ID.
 
 ## 14. Storage
 

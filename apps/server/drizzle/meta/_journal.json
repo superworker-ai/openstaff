@@ -99,6 +99,27 @@
       "when": 1799769600013,
       "tag": "0013_room_sections",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1799769600014,
+      "tag": "0014_computer_sessions",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "6",
+      "when": 1799769600015,
+      "tag": "0015_better_auth",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "6",
+      "when": 1799769600016,
+      "tag": "0016_auth_phase_b",
+      "breakpoints": true
     }
   ]
 }

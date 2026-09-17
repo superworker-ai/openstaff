@@ -1,22 +1,13 @@
 import { expect, it } from 'vitest'
-import { browserHarness } from '../test/browser-harness.js'
+import { browserHarness, createAgent, signUp } from '../test/browser-harness.js'
 
 type Harness = Awaited<ReturnType<typeof browserHarness>>
 
 async function createRoom(h: Harness): Promise<string> {
-  await h.page.goto(`${h.url}/login`, { waitUntil: 'domcontentloaded' })
-  await h.page.locator('body[data-hydrated="true"]').waitFor()
-  await h.page.getByRole('button', { name: 'Sign up', exact: true }).click()
-  await h.page.getByPlaceholder('Your name').fill('Mobile Owner')
-  await h.page.getByPlaceholder('Email', { exact: true }).fill('mobile-room@example.test')
-  await h.page.getByPlaceholder('Password', { exact: true }).fill('browser-password123')
-  await h.page.getByRole('button', { name: 'Create workspace account' }).click()
-  await h.page.getByRole('button', { name: /Engineer/ }).click()
-  await h.page.getByPlaceholder('e.g. Drake').fill('Mobile Bot')
-  await h.page.getByRole('button', { name: 'Create teammate' }).click()
-  await h.page.waitForURL(/\/rooms\/room_[^/]+$/, { waitUntil: 'domcontentloaded' })
+  await signUp(h, { name: 'Mobile Owner', email: 'mobile-room@example.test' })
+  const roomPath = await createAgent(h, 'Mobile Bot', { template: 'Engineer' })
   await h.page.getByRole('heading', { name: 'Mobile Bot', exact: true }).waitFor()
-  return new URL(h.page.url()).pathname
+  return roomPath
 }
 
 it.skipIf(process.env.SKIP_BROWSER_TESTS === '1')('keeps the mobile room focused on chat until the computer is requested', async () => {

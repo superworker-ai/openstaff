@@ -8,6 +8,8 @@ import { bots, workspace } from '../db/schema.js'
 import { availableApps } from '../agent/app-catalog.js'
 import type { AppEnv, ApiDependencies } from './context.js'
 import { isResponse, parseBody } from './helpers.js'
+import { PlanLimitError } from '../plan.js'
+import { MANAGED_PROVIDERS } from '../secrets.js'
 
 /** `typesafe` is deliberately absent: it is not a model provider and is managed in Settings → Experimental. */
 const providerKeysBody = z.object(Object.fromEntries(MODEL_PROVIDERS.map((provider) => [provider, z.string().optional()])) as Record<ModelProvider, z.ZodOptional<z.ZodString>>).strict()
@@ -49,6 +51,7 @@ export function workspaceRoutes({ db, keys, registry, composio, computer, config
     if (c.get('user').role !== 'owner') return c.json({ error: 'Workspace owner required' }, 403)
     const input = await parseBody(c, providerKeysBody)
     if (isResponse(input)) return input
+    if (config.managedKeys && MANAGED_PROVIDERS.some((provider) => input[provider] !== undefined)) return c.json({ error: 'Model and Composio keys are managed by your host', code: 'managed_keys' }, 403)
     await keys.set(input)
     if (input.composio !== undefined) composio.refreshCatalog()
     // A bad Composio key only surfaces later as "Internal server error" inside the connect popup, so reject it here.
@@ -84,7 +87,7 @@ export function workspaceRoutes({ db, keys, registry, composio, computer, config
     const input = await parseBody(context, z.object({ name: z.string().trim().min(1).max(100).optional(), defaultModel: z.string().min(3).optional(), replyDecisionModel: z.string().min(3).nullable().optional(), computerDriver: z.enum(COMPUTER_PROVIDERS).optional() }))
     if (isResponse(input)) return input
     if (input.computerDriver) {
-      try { await computer.setProvider(input.computerDriver) } catch (error) { const message = error instanceof Error ? error.message : 'Computer provider change failed'; return context.json({ error: message }, /running|waiting/.test(message) ? 409 : 400) }
+      try { await computer.setProvider(input.computerDriver) } catch (error) { if (error instanceof PlanLimitError) return context.json(error.body(), 402); const message = error instanceof Error ? error.message : 'Computer provider change failed'; return context.json({ error: message }, /running|waiting/.test(message) ? 409 : 400) }
     }
     const patch = { ...input }; delete patch.computerDriver
     const value = Object.keys(patch).length

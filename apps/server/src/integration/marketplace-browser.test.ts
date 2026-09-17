@@ -10,7 +10,7 @@ describe.skipIf(process.env.SKIP_BROWSER_TESTS === '1')('paginated Marketplace i
     h = await browserHarness({ composioClient: client })
     vi.spyOn(h.api.dependencies.installer.marketplace, 'snapshot').mockReturnValue({ entries: skillRows, warming: false })
     h.page.on('pageerror', (error) => errors.push(error.message))
-    const signup = await h.context.request.post(`${h.url}/api/auth/signup`, { data: { name: 'UI Owner', email: 'ui@example.com', password: 'password123' } })
+    const signup = await h.context.request.post(`${h.url}/api/auth/sign-up/email`, { data: { name: 'UI Owner', email: 'ui@example.com', password: 'password123' } })
     expect(signup.ok()).toBe(true)
   }, 45_000)
   afterAll(async () => { await h?.stop(); vi.restoreAllMocks() })

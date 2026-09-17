@@ -11,14 +11,14 @@ afterEach(() => vi.unstubAllEnvs())
 it('HTTP OAuth connect → authenticated callback → MCP tool succeeds; expired token refreshes automatically on 401', async () => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'openstaff-oauth-')), fake = await fakeOAuthServer()
   vi.stubEnv('PUBLIC_APP_URL', '')
-  const api = await startServer({ config: { dataDir: directory, port: 0, signupCode: '' } })
+  const api = await startServer({ config: { dataDir: directory, port: 0, signupCode: '', authSignup: 'open' } })
   // The ephemeral API origin is only known after listen. Providers resolve their
   // redirect at creation; production sets PUBLIC_APP_URL before server startup.
   vi.stubEnv('PUBLIC_APP_URL', api.url)
   const request = (route: string, init: RequestInit = {}) => fetch(`${api.url}${route}`, { ...init, headers: { 'content-type': 'application/json', cookie, ...init.headers }, redirect: 'manual' })
   let cookie = ''
   try {
-    const signup = await request('/api/auth/signup', { method: 'POST', body: JSON.stringify({ email: 'oauth@example.com', password: 'password123', name: 'Owner' }) })
+    const signup = await request('/api/auth/sign-up/email', { method: 'POST', body: JSON.stringify({ email: 'oauth@example.com', password: 'password123', name: 'Owner' }) })
     expect(signup.headers.get('set-cookie')).toContain('SameSite=Lax')
     cookie = signup.headers.get('set-cookie')!.split(';')[0]!
     const root = await writeOAuthPlugin(directory, fake.url)
@@ -76,9 +76,9 @@ it('HTTP OAuth connect → authenticated callback → MCP tool succeeds; expired
 })
 it('HTTP OAuth dynamically registers clients and lets any member start a connection', async () => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'openstaff-oauth-dcr-')), fake = await fakeOAuthServer({ dcr: true })
-  const api = await startServer({ config: { dataDir: directory, port: 0, signupCode: '', publicAppUrl: 'http://localhost:3000' } })
+  const api = await startServer({ config: { dataDir: directory, port: 0, signupCode: '', authSignup: 'open', publicAppUrl: 'http://localhost:3000' } })
   try {
-    const signup = async (email: string) => (await fetch(`${api.url}/api/auth/signup`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email, name: 'User', password: 'password123' }) })).headers.get('set-cookie')!.split(';')[0]!
+    const signup = async (email: string) => (await fetch(`${api.url}/api/auth/sign-up/email`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email, name: 'User', password: 'password123' }) })).headers.get('set-cookie')!.split(';')[0]!
     const owner = await signup('owner@example.com'), member = await signup('member@example.com')
     const id = await api.dependencies.installer.install(`path:${await writeOAuthPlugin(directory, fake.url)}`)
     const route = `${api.url}/api/plugins/${id}/servers/Gmail/connect`

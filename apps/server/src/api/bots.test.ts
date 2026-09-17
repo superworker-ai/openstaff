@@ -17,7 +17,7 @@ describe('bots API', () => {
       return { response, data: await response.json() as Record<string, any> }
     }
     try {
-      const signup = await request('/api/auth/signup', 'POST', { name: 'Owner', email: 'owner@example.test', password: 'password123' })
+      const signup = await request('/api/auth/sign-up/email', 'POST', { name: 'Owner', email: 'owner@example.test', password: 'password123' })
       cookie = signup.response.headers.get('set-cookie')!.split(';')[0]!
       const avatar = { shape: 'hex', color: '#7A5AF8', eyes: 'happy', mouth: 'grin', accessory: 'glasses', personality: 'gremlin' }
       const created = await request('/api/bots', 'POST', {

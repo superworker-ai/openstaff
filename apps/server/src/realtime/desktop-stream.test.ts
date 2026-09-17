@@ -1,7 +1,6 @@
 import { createServer } from 'node:http'
 import WebSocket, { WebSocketServer } from 'ws'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { sessions } from '../db/schema.js'
 import { fixture } from '../test/fixture.js'
 import { RealtimeHub } from './hub.js'
 import { ComputerLeaseService } from '../computer/lease.js'
@@ -19,7 +18,6 @@ const controllerAuthorization = `Basic ${Buffer.from('controller:controller-secr
 
 beforeEach(async () => {
   f = await fixture()
-  await f.db.insert(sessions).values({ id: 'desktop-ws-session', userId: f.userId, expiresAt: '2099-01-01T00:00:00.000Z' })
   upstreamSockets = new WebSocketServer({ noServer: true })
   upstreamServer = createServer((request, response) => {
     response.statusCode = [viewerAuthorization, controllerAuthorization].includes(request.headers.authorization ?? '') ? 200 : 401
@@ -40,7 +38,7 @@ beforeEach(async () => {
     viewer: { user: 'viewer', password: 'viewer-secret' },
     controller: { user: 'controller', password: 'controller-secret' },
   }
-  hub = new RealtimeHub(f.db, async () => desktop, 'http://app.example.test')
+  hub = new RealtimeHub(f.db, f.auth, async () => desktop, 'http://app.example.test')
   lease = new ComputerLeaseService(f.db, hub)
   hub.setLease(lease)
   proxyServer = createServer()
@@ -60,7 +58,7 @@ afterEach(async () => {
 async function connect(path: string) {
   const port = (proxyServer.address() as { port: number }).port
   const client = new WebSocket(`ws://127.0.0.1:${port}/api/computer/desktop/websockify${path}`, {
-    headers: { cookie: 'sw_session=desktop-ws-session', origin: 'http://app.example.test', authorization: 'Bearer must-not-pass' },
+    headers: { cookie: f.cookie, origin: 'http://app.example.test', authorization: 'Bearer must-not-pass' },
   })
   await new Promise<void>((resolve, reject) => { client.once('open', resolve); client.once('error', reject) })
   return client
@@ -97,7 +95,7 @@ it('rejects an external stream bridge', async () => {
   desktop = { kind: 'external', cdpUrl: 'https://cdp.example.test', viewerUrl: vi.fn(async () => 'https://stream.example.test/viewer'), controllerUrl: vi.fn(async () => 'https://stream.example.test/control'), revoke }
   const port = (proxyServer.address() as { port: number }).port
   const client = new WebSocket(`ws://127.0.0.1:${port}/api/computer/desktop/websockify`, {
-    headers: { cookie: 'sw_session=desktop-ws-session', origin: 'http://app.example.test' },
+    headers: { cookie: f.cookie, origin: 'http://app.example.test' },
   })
   const status = await new Promise<number | undefined>((resolve) => client.once('unexpected-response', (_request, response) => resolve(response.statusCode)))
   expect(status).toBe(409)
