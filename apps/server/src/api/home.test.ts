@@ -16,7 +16,7 @@ async function seededHome(modelResolver: ModelResolver) {
     const response = await application.app.request(url, { method, headers: { cookie, 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) })
     return { response, data: await response.json() as Record<string, any> }
   }
-  const signup = await request('/api/auth/signup', 'POST', { name: 'Owner', email: `${createId('user')}@example.test`, password: 'password123' })
+  const signup = await request('/api/auth/sign-up/email', 'POST', { name: 'Owner', email: `${createId('user')}@example.test`, password: 'password123' })
   cookie = signup.response.headers.get('set-cookie')!.split(';')[0]!
   const admiral = await request('/api/bots', 'POST', { name: 'Admiral', job: 'Engineer', avatar: { shape: 'circle', color: '#F04438' } })
   const ops = await request('/api/bots', 'POST', { name: 'Ops', job: 'Operations', avatar: { shape: 'triangle', color: '#F79009' } })

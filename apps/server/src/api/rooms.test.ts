@@ -17,7 +17,7 @@ async function request(application: Application, cookie: string, url: string, me
 }
 
 async function signup(application: Application, name: string, email: string): Promise<{ cookie: string; userId: string }> {
-  const result = await request(application, '', '/api/auth/signup', 'POST', { name, email, password: 'password123' })
+  const result = await request(application, '', '/api/auth/sign-up/email', 'POST', { name, email, password: 'password123' })
   return { cookie: result.response.headers.get('set-cookie')!.split(';')[0]!, userId: result.data.user.id }
 }
 
