@@ -40,5 +40,6 @@ export function connectionError(error: unknown): string {
   if (message.includes('invalid_client') || (error instanceof Error && 'errorCode' in error.constructor && error.constructor.errorCode === 'invalid_client')) return 'Client ID or secret is wrong'
   if (message.includes('access_denied')) return 'You declined the consent screen'
   if (/not active yet/i.test(message)) return 'Sign-in did not finish. Try connecting again.'
+  if (message.includes('DefaultAuthConfigNotFound') || message.includes('Default auth config not found')) return 'Composio has no managed sign-in for this app. Create an auth config for it at platform.composio.dev, then connect again.'
   return message
 }

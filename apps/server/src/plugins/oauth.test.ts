@@ -113,4 +113,5 @@ it.each([
   ['redirect_uri_mismatch', 'Add exactly this redirect URI to the OAuth client'],
   ['invalid_client', 'Client ID or secret is wrong'],
   ['access_denied', 'You declined the consent screen'],
+  ['404 {"error":{"message":"Default auth config not found for toolkit","slug":"Auth_Config_DefaultAuthConfigNotFound"}}', 'Composio has no managed sign-in for this app. Create an auth config for it at platform.composio.dev, then connect again.'],
 ])('maps OAuth error %s to plain language', (code, message) => { expect(connectionError(new Error(code))).toBe(message) })
