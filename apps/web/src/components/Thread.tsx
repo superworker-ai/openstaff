@@ -10,12 +10,14 @@ import type { RoomData, RoomView } from '../lib/loaders'
 import { api, formatTime } from '../lib/api'
 import { groupedWithPrevious } from '../lib/message-grouping'
 import { MODEL_GROUPS } from '../lib/models'
+import { normalizeSectionName } from '../lib/room-sections'
 import { BotAvatar, HumanAvatar } from './BotAvatar'
 import { ConnectCard } from './ConnectCard'
 import { BotCompanion } from './BotCompanion'
 import { BotWorkstation } from './BotWorkstation'
 import { MembersPopover } from './MembersPopover'
 import { RoomApps } from './RoomApps'
+import { SectionPicker, SectionTriggerLabel, useRoomSections } from './RoomSections'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu'
 import { IconButton } from './ui/icon-button'
 
@@ -98,6 +100,8 @@ function ModelPicker({ bot, roomId, onError }: { bot: Bot; roomId: string; onErr
 
 export function Thread(props: Props) {
   const { room, user, bots, users, presence, messages, turns, approvals, pending } = props
+  const { rooms: shellRooms } = useRoomSections()
+  const assignedSection = normalizeSectionName(shellRooms.find((item) => item.id === room.id)?.section)
   const queryClient = useQueryClient()
   const computerStatus = useQuery({ queryKey: ['computer-status'], queryFn: () => api<ComputerStatus>('/api/computer/status'), refetchInterval: 5000 })
   const apps = useConnectedApps()
@@ -170,12 +174,13 @@ export function Thread(props: Props) {
     props.onShowComputer()
   }
   let lastDay = ''
-  return <section ref={interactionRoot} className="grid h-full min-h-0 min-w-0 grid-rows-[56px_minmax(0,1fr)_auto] overflow-hidden bg-surface text-fg">
-    <header className="flex min-w-0 items-center border-b border-line bg-surface px-4 max-[639px]:px-2">
-      <MembersPopover room={room} bots={bots} users={users} presence={presence} open={props.membersOpen} onOpenChange={props.onMembersOpenChange} onChanged={props.onMembersChanged} onRoomSettings={props.onSettings} trigger={<button type="button" aria-label="Members" onClick={props.onOpenMembers} className="flex min-w-0 items-center rounded-md pr-2 text-left hover:bg-surface-2 max-[639px]:min-h-[44px]"><HeaderAvatars room={room} /><span className="ml-2 min-w-0"><h1 className="truncate text-[15px] font-semibold">{roomName}</h1><span className="block truncate text-xs text-fg-muted">{subtitle}</span></span></button>} />
+  return <section ref={interactionRoot} className="grid h-full min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden bg-surface text-fg">
+    <header className="flex min-h-14 min-w-0 items-center gap-1 border-b border-line bg-surface px-4 max-[639px]:grid max-[639px]:grid-cols-[minmax(0,1fr)_auto] max-[639px]:px-2 max-[639px]:pt-1">
+      <MembersPopover room={room} bots={bots} users={users} presence={presence} open={props.membersOpen} onOpenChange={props.onMembersOpenChange} onChanged={props.onMembersChanged} onRoomSettings={props.onSettings} trigger={<button type="button" aria-label="Members" onClick={props.onOpenMembers} className="flex min-w-0 max-w-[min(44vw,380px)] items-center rounded-md pr-2 text-left hover:bg-surface-2 max-[639px]:max-w-none max-[639px]:min-h-[44px]"><HeaderAvatars room={room} /><span className="ml-2 min-w-0"><h1 className="truncate text-[15px] font-semibold">{roomName}</h1><span className="block truncate text-xs text-fg-muted">{subtitle}</span></span></button>} />
+      <SectionPicker roomId={room.id} trigger={<button data-testid="header-section-picker" data-assigned={assignedSection ? 'true' : 'false'} type="button" className="section-header-trigger inline-flex h-8 min-w-0 max-w-[180px] items-center gap-1.5 rounded-md border border-line-strong bg-surface-2 px-2.5 text-xs font-medium text-fg-muted transition-[transform,background-color,color,border-color] duration-150 ease-out hover:bg-surface-3 hover:text-fg active:scale-[.97] max-[639px]:col-span-2 max-[639px]:row-start-2 max-[639px]:mb-2 max-[639px]:h-9 max-[639px]:max-w-[min(100%,220px)]"><SectionTriggerLabel roomId={room.id} /></button>} />
       <IconButton label="Room settings" onClick={props.onSettings} className="max-[639px]:hidden"><MoreHorizontal size={18} /></IconButton>
-      <div className="min-w-4 flex-1" />
-      <div className="flex items-center gap-2">
+      <div className="min-w-4 flex-1 max-[639px]:hidden" />
+      <div className="flex items-center gap-2 max-[639px]:col-start-2 max-[639px]:row-start-1 max-[639px]:gap-0">
         <div className="max-[639px]:hidden"><RoomApps room={room} /></div>
         <div className="hidden max-[639px]:block"><RoomApps room={room} compact /></div>
         <span className="relative">

@@ -53,6 +53,13 @@ export const rooms = sqliteTable('rooms', {
   lastMessagePreview: text('last_message_preview'),
 })
 
+export const roomSections = sqliteTable('room_sections', {
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  normalizedName: text('normalized_name').notNull(),
+  name: text('name').notNull(),
+  createdAt: text('created_at').notNull(),
+}, (table) => [primaryKey({ columns: [table.userId, table.normalizedName] })])
+
 export const roomMembers = sqliteTable('room_members', {
   roomId: text('room_id').notNull().references(() => rooms.id, { onDelete: 'cascade' }),
   memberKind: text('member_kind', { enum: ['user', 'bot'] }).notNull(),

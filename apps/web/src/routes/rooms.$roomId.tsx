@@ -7,6 +7,7 @@ import type { Approval, Bot, Message, PublicTurn, ServerWireMessage, Task, TurnE
 import { AppShell } from '../components/AppShell'
 import { ComputerPane } from '../components/ComputerPane'
 import { RoomSettings } from '../components/RoomSettings'
+import { patchSharedRoomFields } from '../components/RoomSections'
 import { Thread } from '../components/Thread'
 import { Dialog, DialogContent, DialogTitle } from '../components/ui/dialog'
 import { useRoomSocket } from '../hooks/useRoomSocket'
@@ -49,6 +50,7 @@ function RoomPage() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [membersOpen, setMembersOpen] = useState(false)
   const [isDesktop, setIsDesktop] = useState(false)
+  const [layoutStorageReady, setLayoutStorageReady] = useState(false)
   const [dragging, setDragging] = useState(false)
   const [liveEvents, setLiveEvents] = useState<TurnEvent[]>([])
   const [pending, setPending] = useState<Record<string, string>>({})
@@ -68,6 +70,7 @@ function RoomPage() {
       }))
     }
     updateMedia()
+    setLayoutStorageReady(true)
     media.addEventListener('change', updateMedia)
     return () => media.removeEventListener('change', updateMedia)
   }, [roomId, search.computer])
@@ -92,7 +95,7 @@ function RoomPage() {
     window.addEventListener('pointercancel', stopDragging)
     return () => { window.removeEventListener('pointerup', stopDragging); window.removeEventListener('pointercancel', stopDragging) }
   }, [dragging])
-  const savedLayout = useDefaultLayout({ id: 'room-layout', storage: typeof window === 'undefined' ? SSR_LAYOUT_STORAGE : localStorage, panelIds: computerOpen && isDesktop ? ['thread', 'computer'] : ['thread'] })
+  const savedLayout = useDefaultLayout({ id: 'room-layout', storage: layoutStorageReady ? localStorage : SSR_LAYOUT_STORAGE, panelIds: computerOpen && isDesktop ? ['thread', 'computer'] : ['thread'] })
   const update = useCallback((producer: (current: RoomData) => RoomData) => queryClient.setQueryData<RoomData>(key, (current) => current ? producer(current) : current), [queryClient, roomId])
   const onEvent = useCallback((event: ServerWireMessage) => {
     if (event.type === 'connection.updated') {
@@ -104,6 +107,7 @@ function RoomPage() {
     } else if (event.type === 'message.delta' && event.roomId === roomId) {
       setPending((current) => ({ ...current, [event.turnId]: event.text }))
     } else if (event.type === 'message.created') {
+      patchSharedRoomFields(queryClient, initial.user.id, event.message.roomId, { lastMessageAt: event.message.createdAt, lastMessagePreview: messagePreview(event.message) })
       update((current) => ({ ...current, messages: event.message.roomId !== roomId || current.messages.some((message) => message.id === event.message.id) ? current.messages : [...current.messages, event.message], rooms: current.rooms.map((room) => room.id === event.message.roomId ? { ...room, lastMessageAt: event.message.createdAt, lastMessagePreview: messagePreview(event.message) } : room) }))
       if (event.message.turnId) setPending((current) => { const next = { ...current }; delete next[event.message.turnId!]; return next })
     } else if (event.type === 'turn.updated') {
@@ -119,15 +123,16 @@ function RoomPage() {
       update((current) => ({ ...current, approvals: current.approvals.some((item) => item.id === event.approval.id) ? current.approvals.map((item) => item.id === event.approval.id ? event.approval : item) : [...current.approvals, event.approval] }))
     } else if (event.type === 'task.updated' && event.task.roomId === roomId) {
       update((current) => ({ ...current, tasks: current.tasks.some((task) => task.id === event.task.id) ? current.tasks.map((task) => task.id === event.task.id ? event.task : task) : [...current.tasks, event.task] }))
-    } else if (event.type === 'room.updated' && event.room.id === roomId) {
-      update((current) => ({ ...current, room: { ...current.room, ...event.room }, rooms: current.rooms.map((room) => room.id === event.room.id ? { ...room, ...event.room } : room) }))
+    } else if (event.type === 'room.updated') {
+      patchSharedRoomFields(queryClient, initial.user.id, event.room.id, event.room)
+      update((current) => ({ ...current, room: current.room.id === event.room.id ? { ...current.room, ...event.room } : current.room, rooms: current.rooms.map((room) => room.id === event.room.id ? { ...room, ...event.room } : room) }))
     } else if (event.type === 'bot.updated') {
       update((current) => {
         const refreshMembers = (members: RoomView['members']) => members.map((member) => member.memberKind === 'bot' && member.memberId === event.bot.id ? { ...member, entity: event.bot } : member)
         return { ...current, bots: current.bots.map((bot) => bot.id === event.bot.id ? event.bot : bot), room: { ...current.room, members: refreshMembers(current.room.members) }, rooms: current.rooms.map((room) => ({ ...room, members: refreshMembers(room.members) })) }
       })
     }
-  }, [roomId, update])
+  }, [initial.user.id, queryClient, roomId, update])
   const afterSeq = data.messages.at(-1)?.seq ?? 0
   const roomIds = data.rooms.map((room) => room.id)
   const socket = useRoomSocket({ roomId, roomIds, afterSeqByRoom: Object.fromEntries(roomIds.map((id) => [id, id === roomId ? afterSeq : 0])), onEvent, onGap: (gapRoomId, gap) => update((current) => gapRoomId === roomId ? { ...current, messages: [...current.messages, ...gap.filter((message) => !current.messages.some((item) => item.id === message.id))].sort((a, b) => a.seq - b.seq) } : { ...current, rooms: current.rooms.map((room) => { const latest = gap.at(-1); return room.id === gapRoomId && latest ? { ...room, lastMessageAt: latest.createdAt, lastMessagePreview: messagePreview(latest) } : room }) }) })

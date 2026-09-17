@@ -92,6 +92,13 @@
       "when": 1799769600012,
       "tag": "0012_durable_mtime",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1799769600013,
+      "tag": "0013_room_sections",
+      "breakpoints": true
     }
   ]
 }

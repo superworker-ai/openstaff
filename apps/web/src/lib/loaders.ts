@@ -29,6 +29,15 @@ export const loadMe = createServerFn({ method: 'GET' }).handler(() => serverApi<
 
 export const loadRooms = createServerFn({ method: 'GET' }).handler(() => serverApi<{ rooms: RoomView[] }>('/api/rooms'))
 
+export const loadAppShell = createServerFn({ method: 'GET' }).handler(async () => {
+  const [roomList, botList, userList] = await Promise.all([
+    serverApi<{ rooms: RoomView[] }>('/api/rooms'),
+    serverApi<{ bots: Bot[] }>('/api/bots'),
+    serverApi<{ users: User[] }>('/api/users'),
+  ])
+  return { rooms: roomList.rooms, bots: botList.bots, users: userList.users }
+})
+
 export const loadHomeFeed = createServerFn({ method: 'GET' }).handler(() => serverApi<HomeFeed>('/api/home/feed'))
 
 export interface BotTemplate { id: string; name: string; job: string; instructions: string; avatar: Avatar; suggestedApps: string[] }

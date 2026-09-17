@@ -1,8 +1,8 @@
-import { and, asc, desc, eq, gt, inArray } from 'drizzle-orm'
+import { and, asc, desc, eq, gt, inArray, isNull } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { createId } from '@openstaff/shared'
-import { bots, messages, roomMembers, rooms, turns, users } from '../db/schema.js'
+import { bots, messages, roomMembers, rooms, roomSections, turns, users } from '../db/schema.js'
 import { fileAttachmentSchema, validateAttachments } from './uploads.js'
 import { publicTurn } from '../db/public.js'
 import type { AppEnv, ApiDependencies } from './context.js'
@@ -13,6 +13,16 @@ const createRoomSchema = z.object({
   botIds: z.array(z.string()).min(2).max(6),
   userIds: z.array(z.string()).default([]),
   section: z.string().trim().max(80).nullable().optional(),
+})
+const createSectionSchema = z.object({ name: z.string().trim().min(1).max(80) })
+const renameSectionSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  newName: z.string().trim().min(1).max(80),
+})
+const updateRoomSchema = z.object({
+  name: z.string().trim().min(1).max(100).nullable().optional(),
+  section: z.string().trim().max(80).nullable().optional(),
+  expectedSection: z.string().max(80).nullable().optional(),
 })
 const memberSchema = z.object({ kind: z.enum(['user', 'bot']), id: z.string() })
 const postMessageSchema = z.object({
@@ -31,6 +41,59 @@ async function details(db: ApiDependencies['db'], room: typeof rooms.$inferSelec
   return { ...room, members: members.map((member) => ({ ...member, entity: member.memberKind === 'bot' ? botRows.find((bot) => bot.id === member.memberId) : userRows.find((user) => user.id === member.memberId) })) }
 }
 
+function normalizedSectionName(name: string): string {
+  return name.trim().toLowerCase()
+}
+
+function compareSectionNames(left: string, right: string): number {
+  return normalizedSectionName(left).localeCompare(normalizedSectionName(right), 'en') || left.localeCompare(right, 'en')
+}
+
+function isSqliteBusy(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error
+    && typeof error.code === 'string' && error.code.startsWith('SQLITE_BUSY')
+}
+
+async function retrySqliteBusy<T>(operation: () => Promise<T>, attempt = 0): Promise<T> {
+  try {
+    return await operation()
+  } catch (error) {
+    if (!isSqliteBusy(error) || attempt >= 5) throw error
+    await new Promise((resolve) => setTimeout(resolve, 10 * 2 ** attempt))
+    return retrySqliteBusy(operation, attempt + 1)
+  }
+}
+
+let sectionRenameQueue: Promise<void> = Promise.resolve()
+
+function serializeSectionRename<T>(operation: () => Promise<T>): Promise<T> {
+  const result = sectionRenameQueue.then(operation)
+  sectionRenameQueue = result.then(() => undefined, () => undefined)
+  return result
+}
+
+async function visibleSections(db: ApiDependencies['db'], userId: string): Promise<Array<{ name: string }>> {
+  const [saved, assigned] = await Promise.all([
+    db.select({ name: roomSections.name }).from(roomSections).where(eq(roomSections.userId, userId)),
+    db.select({ name: rooms.section }).from(roomMembers)
+      .innerJoin(rooms, eq(rooms.id, roomMembers.roomId))
+      .where(and(eq(roomMembers.memberKind, 'user'), eq(roomMembers.memberId, userId))),
+  ])
+  const candidates = [
+    ...saved.map(({ name }) => ({ name: name.trim(), priority: 0 })),
+    ...assigned.flatMap(({ name }) => name?.trim() ? [{ name: name.trim(), priority: 1 }] : []),
+  ].sort((left, right) => left.priority - right.priority || compareSectionNames(left.name, right.name))
+  const canonical = new Map<string, string>()
+  for (const { name } of candidates) if (!canonical.has(normalizedSectionName(name))) canonical.set(normalizedSectionName(name), name)
+  return [...canonical.values()].sort(compareSectionNames).map((name) => ({ name }))
+}
+
+async function canonicalSectionName(db: ApiDependencies['db'], userId: string, value: string | null): Promise<string | null> {
+  if (value === null || !value.trim()) return null
+  const trimmed = value.trim(), normalized = normalizedSectionName(trimmed)
+  return (await visibleSections(db, userId)).find(({ name }) => normalizedSectionName(name) === normalized)?.name ?? trimmed
+}
+
 export function roomRoutes({ db, admission, hub, computer, durable }: ApiDependencies): Hono<AppEnv> {
   const app = new Hono<AppEnv>()
 
@@ -44,6 +107,81 @@ export function roomRoutes({ db, admission, hub, computer, durable }: ApiDepende
     return context.json({ rooms: await Promise.all(rows.map(({ room }) => details(db, room))) })
   })
 
+  app.get('/sections', async (context) => {
+    return context.json({ sections: await visibleSections(db, context.get('user').id) })
+  })
+
+  app.post('/sections', async (context) => {
+    const input = await parseBody(context, createSectionSchema)
+    if (isResponse(input)) return input
+    const userId = context.get('user').id
+    const name = (await canonicalSectionName(db, userId, input.name))!
+    const normalizedName = normalizedSectionName(name)
+    await db.insert(roomSections).values({ userId, normalizedName, name, createdAt: new Date().toISOString() })
+      .onConflictDoNothing({ target: [roomSections.userId, roomSections.normalizedName] })
+    const section = (await db.select({ name: roomSections.name }).from(roomSections)
+      .where(and(eq(roomSections.userId, userId), eq(roomSections.normalizedName, normalizedName))).limit(1))[0]!
+    return context.json({ section }, 201)
+  })
+
+  app.patch('/sections', async (context) => {
+    const input = await parseBody(context, renameSectionSchema)
+    if (isResponse(input)) return input
+    const userId = context.get('user').id
+    const oldNormalized = normalizedSectionName(input.name), newNormalized = normalizedSectionName(input.newName)
+    const outcome = await serializeSectionRename(() => retrySqliteBusy(() => db.transaction(async (transaction) => {
+      const saved = await transaction.select({
+        normalizedName: roomSections.normalizedName,
+        name: roomSections.name,
+        createdAt: roomSections.createdAt,
+      }).from(roomSections).where(eq(roomSections.userId, userId))
+      const assigned = await transaction.select({ room: rooms }).from(roomMembers)
+        .innerJoin(rooms, eq(rooms.id, roomMembers.roomId))
+        .where(and(eq(roomMembers.memberKind, 'user'), eq(roomMembers.memberId, userId)))
+      const oldSaved = saved.filter(({ name }) => normalizedSectionName(name) === oldNormalized)
+      const oldAssigned = assigned.filter(({ room }) => room.section && normalizedSectionName(room.section) === oldNormalized)
+      if (!oldSaved.length && !oldAssigned.length) return { kind: 'missing' as const }
+
+      const previousName = [
+        ...oldSaved.map(({ name }) => ({ name: name.trim(), priority: 0 })),
+        ...oldAssigned.map(({ room }) => ({ name: room.section!.trim(), priority: 1 })),
+      ].sort((left, right) => left.priority - right.priority || compareSectionNames(left.name, right.name))[0]!.name
+      if (input.name === input.newName) {
+        return { kind: 'renamed' as const, previousName, name: previousName, rooms: [] as Array<typeof rooms.$inferSelect> }
+      }
+      if (newNormalized !== oldNormalized) {
+        const collides = saved.some(({ name }) => normalizedSectionName(name) === newNormalized)
+          || assigned.some(({ room }) => room.section && normalizedSectionName(room.section) === newNormalized)
+        if (collides) return { kind: 'collision' as const }
+      }
+
+      const savedRow = oldSaved[0]
+      if (savedRow) {
+        await transaction.update(roomSections).set({ normalizedName: newNormalized, name: input.newName })
+          .where(and(eq(roomSections.userId, userId), eq(roomSections.normalizedName, savedRow.normalizedName)))
+      } else {
+        await transaction.insert(roomSections).values({
+          userId,
+          normalizedName: newNormalized,
+          name: input.newName,
+          createdAt: new Date().toISOString(),
+        })
+      }
+      const roomIds = oldAssigned.filter(({ room }) => room.section !== input.newName).map(({ room }) => room.id)
+      if (roomIds.length) await transaction.update(rooms).set({ section: input.newName }).where(inArray(rooms.id, roomIds))
+      const updatedRooms = roomIds.length
+        ? await transaction.select().from(rooms).where(inArray(rooms.id, roomIds))
+        : []
+      updatedRooms.sort((left, right) => left.id.localeCompare(right.id))
+      return { kind: 'renamed' as const, previousName, name: input.newName, rooms: updatedRooms }
+    })))
+    if (outcome.kind === 'missing') return context.json({ error: 'Section not found' }, 404)
+    if (outcome.kind === 'collision') return context.json({ error: 'Section already exists' }, 409)
+    const ts = new Date().toISOString()
+    for (const room of outcome.rooms) hub.broadcastRoom(room.id, { type: 'room.updated', room, ts })
+    return context.json({ section: { name: outcome.name }, previousName: outcome.previousName, rooms: outcome.rooms })
+  })
+
   app.post('/', async (context) => {
     const input = await parseBody(context, createRoomSchema)
     if (isResponse(input)) return input
@@ -54,7 +192,8 @@ export function roomRoutes({ db, admission, hub, computer, durable }: ApiDepende
     const userIds = [...new Set([user.id, ...input.userIds])]
     if ((await db.select({ id: users.id }).from(users).where(inArray(users.id, userIds))).length !== userIds.length) return context.json({ error: 'One or more users do not exist' }, 400)
     const now = new Date().toISOString()
-    const room: typeof rooms.$inferInsert = { id: createId('room'), kind: 'group', name: input.name, section: input.section ?? null, createdBy: user.id, lastMessageAt: null, lastMessagePreview: null }
+    const section = await canonicalSectionName(db, user.id, input.section ?? null)
+    const room: typeof rooms.$inferInsert = { id: createId('room'), kind: 'group', name: input.name, section, createdBy: user.id, lastMessageAt: null, lastMessagePreview: null }
     await db.transaction(async (transaction) => {
       await transaction.insert(rooms).values(room)
       await transaction.insert(roomMembers).values([
@@ -74,11 +213,27 @@ export function roomRoutes({ db, admission, hub, computer, durable }: ApiDepende
 
   app.patch('/:id', async (context) => {
     const id = context.req.param('id')
-    if (!await member(id, context.get('user').id)) return context.json({ error: 'Room not found' }, 404)
-    const input = await parseBody(context, z.object({ name: z.string().trim().min(1).max(100).nullable().optional(), section: z.string().trim().max(80).nullable().optional() }))
+    const userId = context.get('user').id
+    if (!await member(id, userId)) return context.json({ error: 'Room not found' }, 404)
+    const input = await parseBody(context, updateRoomSchema)
     if (isResponse(input)) return input
-    const room = (await db.update(rooms).set(input).where(eq(rooms.id, id)).returning())[0]
-    if (!room) return context.json({ error: 'Room not found' }, 404)
+    const hasName = Object.hasOwn(input, 'name'), hasSection = Object.hasOwn(input, 'section')
+    const hasExpectedSection = Object.hasOwn(input, 'expectedSection')
+    const update: { name?: string | null; section?: string | null } = {}
+    if (hasName) update.name = input.name
+    if (hasSection) update.section = await canonicalSectionName(db, userId, input.section ?? null)
+    const expected = input.expectedSection
+    const condition = hasExpectedSection
+      ? and(eq(rooms.id, id), expected === null ? isNull(rooms.section) : eq(rooms.section, expected!))!
+      : eq(rooms.id, id)
+    const room = hasName || hasSection
+      ? (await db.update(rooms).set(update).where(condition).returning())[0]
+      : (await db.select().from(rooms).where(condition).limit(1))[0]
+    if (!room) {
+      if (!await member(id, userId)) return context.json({ error: 'Room not found' }, 404)
+      if (hasExpectedSection) return context.json({ error: 'Room section changed' }, 409)
+      return context.json({ error: 'Room not found' }, 404)
+    }
     hub.broadcastRoom(id, { type: 'room.updated', room, ts: new Date().toISOString() })
     return context.json({ room })
   })

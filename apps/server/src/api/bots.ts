@@ -25,6 +25,17 @@ const createBotSchema = z.object({
   approvalPolicy: z.enum(['auto', 'writes', 'all']).default('writes'),
 })
 
+// PATCH intentionally has no creation defaults so omitted fields remain unchanged.
+const updateBotSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  job: z.string().trim().min(1).max(160),
+  instructions: z.string().max(20_000),
+  avatar: avatarSchema,
+  model: z.string().nullable(),
+  reasoningEffort: z.string().nullable(),
+  approvalPolicy: z.enum(['auto', 'writes', 'all']),
+}).partial()
+
 function slugify(name: string): string {
   return name.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'bot'
 }
@@ -75,7 +86,7 @@ export function botRoutes({ db, hub, admission, computer, durable }: ApiDependen
   })
 
   app.patch('/:id', async (context) => {
-    const input = await parseBody(context, createBotSchema.omit({ templateId: true }).partial())
+    const input = await parseBody(context, updateBotSchema)
     if (isResponse(input)) return input
     const updated = (await db.update(bots).set(input).where(eq(bots.id, context.req.param('id'))).returning())[0]
     if (!updated) return context.json({ error: 'Bot not found' }, 404)
