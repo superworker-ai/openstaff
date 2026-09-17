@@ -10,11 +10,11 @@ the hosted ("cloud") version. Update it as items land; delete it after launch.
   The GHCR owner in `compose.prod.yml` and `.env.example` (`superworker-ai`) now matches
   where the release workflow publishes.
 - **Branches**: `main` holds only the initial commit. The real trunk is
-  `jcgarzar/open-source-grok-bot-clone`. Three feature branches are reviewed, green, and
-  unmerged: `jcgarzar/cloud-phase1` (plans, suspended gate, managed model keys, usage
-  export), `jcgarzar/cloud-managed-keys` (managed Composio and Computer credentials),
-  `jcgarzar/auth` (Better Auth, SSO, social, 2FA, invitations, audit). They are being
-  combined on `jcgarzar/integrate-cloud-auth`.
+  `jcgarzar/open-source-grok-bot-clone`. The three feature branches (`jcgarzar/cloud-phase1`,
+  `jcgarzar/cloud-managed-keys`, `jcgarzar/auth`) were combined on
+  `jcgarzar/integrate-cloud-auth` and landed on the trunk on 2026-09-17 (merge `cab0b71`),
+  together with the connection popup hardening, the Composio custom-auth fix, and the
+  members and invitations usability work. Those branches can be deleted.
 - **Hosting**: production runs on Railway (`docs/DEPLOY.md`), URL
   `gateway-production-5295.up.railway.app`, custom domain `app.myopenstaff.com` pending the
   dashboard attach and Namecheap CNAME. Marketing site is `apps/landing` for `myopenstaff.com`.
@@ -31,7 +31,8 @@ the hosted ("cloud") version. Update it as items land; delete it after launch.
 
 Engineering
 
-- [ ] Land `jcgarzar/integrate-cloud-auth` on the trunk (merge, CI green).
+- [x] Land `jcgarzar/integrate-cloud-auth` on the trunk (merged 2026-09-17; the browser suites
+      were rewritten for the agent builder in the same merge, which is what had CI red).
 - [ ] Open a pull request from the trunk to `main` and merge it. `main` becomes the trunk;
       stop branching from `jcgarzar/open-source-grok-bot-clone`.
 - [ ] Decide whether to keep the full history or squash to a single "Initial public release"
@@ -93,7 +94,7 @@ the authentication stack a paying customer expects (SSO, 2FA, invitations, audit
 
 Next, in order
 
-1. Land the integration branch (this unblocks everything below).
+1. ~~Land the integration branch~~ (done 2026-09-17).
 2. First managed tenant on Railway: `MANAGED_KEYS=1`, `WORKSPACE_PLAN=team`,
    `COMPUTER_DRIVER=e2b`, plus `AI_GATEWAY_API_KEY` and `E2B_API_KEY` as service variables.
    Blocked on those two keys; the local `.env` only has OpenAI and Composio keys. Set spend
