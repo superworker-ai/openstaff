@@ -1,4 +1,4 @@
-import { and, desc, eq } from 'drizzle-orm'
+import { and, asc, desc, eq } from 'drizzle-orm'
 import { generateText, isStepCount, Output, ToolLoopAgent, type ModelMessage, type ToolSet } from 'ai'
 import { z } from 'zod'
 import { connectionPath, createId, MESSAGE_DELTA_INTERVAL_MS, type AppConnection, type Approval, type ComputerProviderId, type JsonValue, type Turn } from '@openstaff/shared'
@@ -6,7 +6,7 @@ import type { BrowserService, BrowserSession } from '../browser/service.js'
 import { browserTools } from '../browser/tools.js'
 import type { Computer } from '../computer/types.js'
 import type { Database } from '../db/index.js'
-import { approvals, bots, messages, turns, workspace } from '../db/schema.js'
+import { approvals, bots, messages, roomMembers, turns, workspace } from '../db/schema.js'
 import { labelMessage, loadRoomHistory } from './history.js'
 import { approvalSummary } from './approval-summary.js'
 import { mergeUsage } from './usage.js'
@@ -92,7 +92,8 @@ export interface AgentRuntimeOptions {
   hub?: RealtimeHub
   contextMessages: number
   modelResolver?: ModelResolver
-  replyDecisionExperiment?: ReplyDecisionExperiment
+  /** A getter, so a hot-swapped experiment instance is picked up on the next decision. */
+  replyDecisionExperiment?: () => ReplyDecisionExperiment | undefined
 }
 
 export class AgentRuntime {
@@ -115,6 +116,12 @@ export class AgentRuntime {
     const bot = (await db.select().from(bots).where(eq(bots.id, turn.botId)).limit(1))[0]
     const settings = (await db.select().from(workspace).where(eq(workspace.id, 'workspace')).limit(1))[0]
     if (!bot) return false
+    const teammateRows = await db.select({ id: bots.id, name: bots.name, job: bots.job }).from(roomMembers)
+      .innerJoin(bots, eq(roomMembers.memberId, bots.id))
+      .where(and(eq(roomMembers.roomId, turn.roomId), eq(roomMembers.memberKind, 'bot')))
+      .orderBy(asc(roomMembers.joinedAt))
+    const teammates = teammateRows.filter((teammate) => teammate.id !== turn.botId)
+      .map((teammate) => `${teammate.name}: ${teammate.job}`).join('\n') || '(None.)'
     const history = await loadRoomHistory(db, turn.roomId, this.options.contextMessages)
     const replies = await db.select({ message: messages }).from(messages).innerJoin(turns, eq(messages.turnId, turns.id))
       .where(and(eq(turns.triggerMessageId, turn.triggerMessageId), eq(messages.authorKind, 'bot'))).orderBy(desc(messages.seq)).limit(3)
@@ -127,16 +134,17 @@ export class AgentRuntime {
         model: this.modelResolver(modelId, { sessionId: conversationId(turn) }),
         output: Output.object({ schema: z.object({ reply: z.boolean(), reason: z.string() }) }),
         abortSignal: combined,
-        prompt: `You are deciding whether ${bot.name}, whose job is "${bot.job}", should reply in this room. Reply only for a unique, material contribution: its lane, a correction, or a blocker. Return reply:false for agreement, acknowledgement, emoji-only replies, restating a teammate, or no useful contribution.\n\nLast 3 bot replies to this same trigger (author labeled):\n${recentReplies}\n\nRoom history:\n${history}`,
+        prompt: `You are deciding whether ${bot.name}, whose job is "${bot.job}", should reply in this room. Return reply:true when the latest message greets or addresses ${bot.name} by name (even misspelled) or asks ${bot.name} to respond, whatever the topic. Return reply:false when the latest message addresses a different teammate by name. Otherwise reply only for a unique, material contribution: its lane, a correction, or a blocker. Return reply:false for agreement, acknowledgement, emoji-only replies, restating a teammate, or no useful contribution.\n\nOther bots in this room (name: job):\n${teammates}\n\nLast 3 bot replies to this same trigger (author labeled):\n${recentReplies}\n\nRoom history:\n${history}`,
       })
       return { reply: result.output.reply, model: modelId, usage: { inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens } }
     }
-    if (!this.options.replyDecisionExperiment?.applies(turn.roomId)) return (await baseline()).reply
+    const experiment = this.options.replyDecisionExperiment?.()
+    if (!experiment?.applies(turn.roomId)) return (await baseline()).reply
     const trigger = (await db.select({ authorKind: messages.authorKind, text: messages.text }).from(messages).where(eq(messages.id, turn.triggerMessageId)).limit(1))[0]
     if (!trigger) return (await baseline()).reply
-    return this.options.replyDecisionExperiment.compare({
+    return experiment.compare({
       roomId: turn.roomId, turnId: turn.id, botId: turn.botId,
-      state: { candidate: { name: bot.name, job: bot.job }, trigger, history, recentReplies }, signal, baseline,
+      state: { candidate: { name: bot.name, job: bot.job }, teammates, trigger, history, recentReplies }, signal, baseline,
     })
   }
 

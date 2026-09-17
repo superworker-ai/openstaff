@@ -38,7 +38,7 @@ export class Secrets {
   }
 }
 
-const envNames: Record<Provider, string> = { xai: 'XAI_API_KEY', anthropic: 'ANTHROPIC_API_KEY', openai: 'OPENAI_API_KEY', opencode: 'OPENCODE_API_KEY', composio: 'COMPOSIO_API_KEY', aiGateway: 'AI_GATEWAY_API_KEY' }
+const envNames: Record<Provider, string> = { xai: 'XAI_API_KEY', anthropic: 'ANTHROPIC_API_KEY', openai: 'OPENAI_API_KEY', opencode: 'OPENCODE_API_KEY', composio: 'COMPOSIO_API_KEY', aiGateway: 'AI_GATEWAY_API_KEY', typesafe: 'TYPESAFE_API_KEY' }
 export class KeyStore {
   private readonly keys = new Map<Provider, string>()
   constructor(private readonly db: Database, private readonly secrets: Secrets) {}
@@ -47,6 +47,11 @@ export class KeyStore {
     for (const row of await this.db.select().from(providerKeys)) this.keys.set(row.provider, this.secrets.decrypt(row.encryptedKey))
   }
   get(provider: Provider): string | undefined { return this.keys.get(provider) || process.env[envNames[provider]] || undefined }
+  /** Distinguishes a saved key from the environment fallback without revealing either. */
+  source(provider: Provider): 'settings' | 'env' | null {
+    if (this.keys.get(provider)) return 'settings'
+    return process.env[envNames[provider]] ? 'env' : null
+  }
   configured(): Record<Provider, boolean> { return Object.fromEntries(PROVIDERS.map((provider) => [provider, Boolean(this.get(provider))])) as Record<Provider, boolean> }
   async set(values: Partial<Record<Provider, string>>): Promise<void> {
     await this.db.transaction(async (tx) => {

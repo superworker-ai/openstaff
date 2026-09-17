@@ -41,6 +41,41 @@ export const workspaceSchema = z.object({
   settings: z.record(z.string(), jsonValueSchema),
 })
 
+/** Experimental switches live in `workspace.settings.experimental`. They are unstable by design. */
+const jevExperimentFields = {
+  mode: z.enum(['off', 'shadow']),
+  model: z.string().trim().min(1).max(64),
+  timeoutMs: z.number().int().min(100).max(6000),
+  roomIds: z.array(z.string().trim().min(1)).max(50),
+}
+/** The stored shape: every field resolves to a default. */
+export const jevExperimentSchema = z.object({
+  mode: jevExperimentFields.mode.default('off'),
+  model: jevExperimentFields.model.default('jev-latest'),
+  timeoutMs: jevExperimentFields.timeoutMs.default(1200),
+  roomIds: jevExperimentFields.roomIds.default([]),
+})
+/**
+ * The edit shape, built from the same field validators so the two cannot drift. It carries no
+ * defaults: an omitted key stays omitted, so a partial update merges instead of resetting the
+ * fields it did not mention.
+ */
+export const jevExperimentPatchSchema = z.object({
+  mode: jevExperimentFields.mode.optional(),
+  model: jevExperimentFields.model.optional(),
+  timeoutMs: jevExperimentFields.timeoutMs.optional(),
+  roomIds: jevExperimentFields.roomIds.optional(),
+}).strict()
+export const experimentalSettingsSchema = z.object({ jev: jevExperimentSchema.prefault({}) })
+export type JevExperimentSettings = z.infer<typeof jevExperimentSchema>
+export type JevExperimentPatch = z.infer<typeof jevExperimentPatchSchema>
+export type ExperimentalSettings = z.infer<typeof experimentalSettingsSchema>
+
+/** Never throws: an absent or malformed `experimental` block reads as the defaults. */
+export function readExperimentalSettings(settings: Record<string, JsonValue> | null | undefined): ExperimentalSettings {
+  return experimentalSettingsSchema.catch(() => experimentalSettingsSchema.parse({})).parse(settings?.experimental)
+}
+
 export const botSchema = z.object({
   suggestedApps: z.array(z.string()).optional(),
   id: idSchema,

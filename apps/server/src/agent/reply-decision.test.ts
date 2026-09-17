@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { JevExperimentSettings } from '@openstaff/shared'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { DecisionServiceError, JevDecisionService, ReplyDecisionExperiment, replyDecisionExperimentFromEnv, replyDecisionFileObserver, type ReplyDecisionState, type ReplyEvaluation } from './reply-decision.js'
+import { DecisionServiceError, JevDecisionService, ReplyDecisionExperiment, ReplyDecisionExperimentManager, replyDecisionExperimentFromSettings, replyDecisionFileObserver, type ReplyDecisionState, type ReplyEvaluation } from './reply-decision.js'
 
-const state: ReplyDecisionState = { candidate: { name: 'Ari', job: 'Backend engineer' }, trigger: { authorKind: 'user', text: 'Fix the API.' }, history: 'Owner: Fix the API.', recentReplies: '(None yet.)' }
-const evaluation: ReplyEvaluation = { model: 'jev-test', probabilities: { relevant: 0.99, actionable: 0.99, covered: 0.01, new_information: 0.01 }, usage: { input_tokens: 200, output_tokens: 40 } }
+const state: ReplyDecisionState = { candidate: { name: 'Ari', job: 'Backend engineer' }, teammates: 'Bea: Designer', trigger: { authorKind: 'user', text: 'Fix the API.' }, history: 'Owner: Fix the API.', recentReplies: '(None yet.)' }
+const evaluation: ReplyEvaluation = { model: 'jev-test', probabilities: { addressed: 0.05, relevant: 0.99, actionable: 0.99, covered: 0.01, new_information: 0.01 }, usage: { input_tokens: 200, output_tokens: 40 } }
 const baseline = async () => ({ reply: false, model: 'baseline-test', usage: { inputTokens: 100, outputTokens: 10 } })
 
 afterEach(() => vi.useRealTimers())
@@ -123,10 +124,47 @@ describe('Jev reply decisions', () => {
     } finally { await experiment.close(); await fs.rm(directory, { recursive: true, force: true }) }
   })
 
-  it('defaults off and rejects accidental active mode or invalid configuration', () => {
-    expect(replyDecisionExperimentFromEnv({ TYPESAFE_API_KEY: 'synthetic-test-key' })).toBeUndefined()
-    expect(() => replyDecisionExperimentFromEnv({ JEV_REPLY_MODE: 'active' })).toThrow('off or shadow')
-    expect(() => replyDecisionExperimentFromEnv({ JEV_REPLY_MODE: 'shadow' })).toThrow('TYPESAFE_API_KEY')
-    expect(() => replyDecisionExperimentFromEnv({ JEV_REPLY_MODE: 'shadow', TYPESAFE_API_KEY: 'synthetic-test-key', JEV_REPLY_TIMEOUT_MS: '-1' })).toThrow('integer')
+  it('builds nothing unless settings ask for shadow and a key exists', () => {
+    const shadow: JevExperimentSettings = { mode: 'shadow', model: 'jev-latest', timeoutMs: 1_200, roomIds: ['room-pilot'] }
+    expect(replyDecisionExperimentFromSettings({ ...shadow, mode: 'off' }, 'synthetic-test-key', './data')).toBeUndefined()
+    expect(replyDecisionExperimentFromSettings({ ...shadow, roomIds: [] }, undefined, './data')).toBeUndefined()
+    expect(replyDecisionExperimentFromSettings({ ...shadow, roomIds: [] }, '', './data')).toBeUndefined()
+    const experiment = replyDecisionExperimentFromSettings(shadow, 'synthetic-test-key', './data')!
+    expect(experiment).toBeInstanceOf(ReplyDecisionExperiment)
+    expect(experiment.applies('room-pilot')).toBe(true)
+    expect(experiment.applies('room-other')).toBe(false)
+  })
+
+  it('hot swaps the experiment without losing an observation the old instance is writing', async () => {
+    const jevResponse = { model: 'jev-test', answers: Object.fromEntries(Object.entries(evaluation.probabilities).map(([key, value]) => [key, { type: 'noul', noul: value }])), usage: evaluation.usage }
+    vi.stubGlobal('fetch', async () => new Response(JSON.stringify(jevResponse)))
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'jev-reply-manager-'))
+    const manager = new ReplyDecisionExperimentManager(directory)
+    try {
+      await manager.configure({ mode: 'shadow', model: 'jev-latest', timeoutMs: 1_200, roomIds: ['room-pilot'] }, 'synthetic-test-key')
+      const first = manager.get()!
+      expect(first.applies('room-pilot')).toBe(true)
+      expect(first.applies('room-other')).toBe(false)
+      let release!: () => void
+      const held = new Promise<void>((resolve) => { release = resolve })
+      let started = false, recorded = false
+      void first.compare({ roomId: 'room-pilot', state, baseline, record: async () => { started = true; await held; recorded = true } })
+      await vi.waitFor(() => expect(started).toBe(true))
+      let swapped = false
+      const swap = manager.configure({ mode: 'shadow', model: 'jev-next', timeoutMs: 1_200, roomIds: [] }, 'synthetic-test-key').then(() => { swapped = true })
+      await new Promise((resolve) => setTimeout(resolve, 10))
+      expect(swapped).toBe(false)
+      expect(recorded).toBe(false)
+      release()
+      await swap
+      expect(recorded).toBe(true)
+      expect(first.applies('room-pilot')).toBe(false)
+      const second = manager.get()!
+      expect(second).not.toBe(first)
+      expect(second.applies('room-other')).toBe(true)
+      await manager.configure({ mode: 'off', model: 'jev-latest', timeoutMs: 1_200, roomIds: [] }, 'synthetic-test-key')
+      expect(manager.get()).toBeUndefined()
+      expect(second.applies('room-other')).toBe(false)
+    } finally { await manager.close(); vi.unstubAllGlobals(); await fs.rm(directory, { recursive: true, force: true }) }
   })
 })

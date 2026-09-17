@@ -9,7 +9,7 @@ import { AgentRuntime } from '../agent/runtime.js'
 import { ReplyDecisionExperiment, type DecisionService, type ReplyEvaluation, type ReplyObserver } from '../agent/reply-decision.js'
 import { TurnScheduler } from './scheduler.js'
 
-const evaluation: ReplyEvaluation = { model: 'jev-test', probabilities: { relevant: 0.99, actionable: 0.99, covered: 0.01, new_information: 0.01 }, usage: { input_tokens: 100, output_tokens: 40 } }
+const evaluation: ReplyEvaluation = { model: 'jev-test', probabilities: { addressed: 0.05, relevant: 0.99, actionable: 0.99, covered: 0.01, new_information: 0.01 }, usage: { input_tokens: 100, output_tokens: 40 } }
 
 async function groupFixture() {
   const f = await fixture()
@@ -29,7 +29,7 @@ it('compares sequential optional bots against fresh teammate replies without cha
     doGenerate: async () => objectResult({ reply: decisions++ === 0, reason: 'Synthetic baseline' }),
     doStream: async () => textStream('Restored DATABASE_URL and verified recovery.'),
   })
-  const runtime = new AgentRuntime({ ...f, contextMessages: 10, modelResolver: () => model, replyDecisionExperiment: experiment })
+  const runtime = new AgentRuntime({ ...f, contextMessages: 10, modelResolver: () => model, replyDecisionExperiment: () => experiment })
   const scheduler = new TurnScheduler(f.db, runtime, f.admission, undefined, 3)
   try {
     f.admission.setTurnEnqueuer((values) => scheduler.enqueue(values))
@@ -52,11 +52,44 @@ it('compares sequential optional bots against fresh teammate replies without cha
   } finally { await scheduler.shutdown(); await experiment.close(); await f.close() }
 })
 
+it('gives a bot greeted by name without an @ the direct turn and leaves the teammate optional', async () => {
+  const f = await groupFixture(), evaluate = vi.fn<DecisionService['evaluate']>(async () => evaluation)
+  const experiment = new ReplyDecisionExperiment({ evaluate })
+  const model = new MockLanguageModelV3({
+    doGenerate: objectResult({ reply: false, reason: 'Addressed to the teammate' }),
+    doStream: async () => textStream('Hello!'),
+  })
+  const runtime = new AgentRuntime({ ...f, contextMessages: 10, modelResolver: () => model, replyDecisionExperiment: () => experiment })
+  const scheduler = new TurnScheduler(f.db, runtime, f.admission, undefined, 3)
+  try {
+    f.admission.setTurnEnqueuer((values) => scheduler.enqueue(values))
+    const posted = await f.admission.post({ roomId: f.roomId, authorKind: 'user', authorId: f.userId, text: 'hola bela' })
+    expect(posted.message.mentions).toEqual([{ kind: 'bot', id: f.second }])
+    expect(posted.turns.map((turn) => [turn.botId, turn.replyMode])).toEqual([
+      [f.second, 'direct'],
+      [f.botId, 'optional'],
+    ])
+    await vi.waitFor(async () => {
+      const stored = await f.db.select().from(turns)
+      expect(posted.turns.map((planned) => stored.find((turn) => turn.id === planned.id)?.status)).toEqual(['done', 'skipped'])
+    })
+    await experiment.drain()
+    expect((await f.db.select().from(messages)).filter((message) => message.authorKind === 'bot'))
+      .toEqual([expect.objectContaining({ authorId: f.second, text: 'Hello!' })])
+    expect(evaluate).toHaveBeenCalledTimes(1)
+    expect(evaluate.mock.calls[0]?.[0]).toMatchObject({
+      candidate: { name: 'drake' },
+      teammates: 'Bella: Designer',
+      trigger: { authorKind: 'user', text: 'hola bela' },
+    })
+  } finally { await scheduler.shutdown(); await experiment.close(); await f.close() }
+})
+
 it('preserves the final responder fallback and does not classify that forced reply', async () => {
   const f = await groupFixture(), evaluate = vi.fn(async () => evaluation)
   const experiment = new ReplyDecisionExperiment({ evaluate })
   const model = new MockLanguageModelV3({ doGenerate: objectResult({ reply: false, reason: 'No contribution' }), doStream: async () => textStream('How can we help?') })
-  const runtime = new AgentRuntime({ ...f, contextMessages: 10, modelResolver: () => model, replyDecisionExperiment: experiment })
+  const runtime = new AgentRuntime({ ...f, contextMessages: 10, modelResolver: () => model, replyDecisionExperiment: () => experiment })
   const scheduler = new TurnScheduler(f.db, runtime, f.admission, undefined, 3)
   try {
     f.admission.setTurnEnqueuer((values) => scheduler.enqueue(values))
@@ -74,7 +107,7 @@ it('leaves explicit bot handoffs direct and ordinary bot messages silent', async
   const f = await groupFixture(), evaluate = vi.fn(async () => evaluation)
   const experiment = new ReplyDecisionExperiment({ evaluate })
   const model = new MockLanguageModelV3({ doStream: async () => textStream('The design review is complete.') })
-  const runtime = new AgentRuntime({ ...f, contextMessages: 10, modelResolver: () => model, replyDecisionExperiment: experiment })
+  const runtime = new AgentRuntime({ ...f, contextMessages: 10, modelResolver: () => model, replyDecisionExperiment: () => experiment })
   const scheduler = new TurnScheduler(f.db, runtime, f.admission, undefined, 3)
   try {
     f.admission.setTurnEnqueuer((values) => scheduler.enqueue(values))

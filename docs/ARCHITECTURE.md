@@ -112,9 +112,10 @@ goes. We skip the turn when it's not our lane.") and from the Rooms policy in th
 1. **Admission.** A message is inserted with the next `seq` for its room inside a
    transaction. Then a *conversation run* is planned for that message:
    - `dm` room, human author → one `direct` turn for the bot.
-   - `group` room, human author → every `@mentioned` bot gets a `direct` turn (in mention
-     order); every other bot member gets an `optional` turn. If no bot is mentioned, all bots
-     get `optional` turns.
+   - `group` room, human author → every bot mentioned by `@name`, `@slug`, or by its name or
+     slug used as a standalone word gets a `direct` turn (in mention order); every other bot
+     member gets an `optional` turn. Longer single-word names and slugs tolerate one inserted,
+     deleted, or substituted character. If no bot is mentioned, all bots get `optional` turns.
    - Bot author → only mentions carrying `handoff:true`, issued by the handoff tool,
      get `direct` turns, and only if `handoff_depth < 3`. Free-text bot mentions never
      schedule turns. Human mentions keep their direct/optional behavior.
@@ -373,6 +374,20 @@ the core SDK directly; `request_connection` owns interactive connection pauses.
 Connections are listed from Composio and mirrored atomically into `connections`.
 Composio connection state is revalidated at the execution gate and callback; disconnect
 deletes the connected account. Apps offers Composio sign-in and plugin installation together.
+
+**Experimental settings**: Settings → Experimental (sidebar group *Labs*, rendered last) holds
+unstable switches, currently the Jev reply-decision experiment. Its non-secret fields live in the
+`workspace.settings` JSON column as `{ experimental: { jev: { mode, model, timeoutMs, roomIds } } }`,
+parsed by `readExperimentalSettings` in `@openstaff/shared` with defaults on anything missing or
+malformed, so no migration is involved. Its credential is the `typesafe` provider key, encrypted in
+`provider_keys` like every other key with `TYPESAFE_API_KEY` as the environment fallback; it is
+excluded from `MODEL_PROVIDERS`, so it never appears on the Providers page and `PUT
+/api/workspace/provider-keys` rejects it. `GET`/`PUT /api/workspace/experimental` are owner-gated for
+writes and never echo the key, reporting only `keyConfigured` and `keySource`. A
+`ReplyDecisionExperimentManager` owns the live instance: `PUT` persists the settings and then calls
+`configure`, which builds the replacement, swaps it in, and closes the previous instance so
+in-flight observations drain. `AgentRuntime` reads the experiment through a getter, so a swap takes
+effect on the next reply decision without a restart.
 
 Phase 2 implementation notes:
 - Plugin variables and provider keys use AES-256-GCM with a random nonce for each value.

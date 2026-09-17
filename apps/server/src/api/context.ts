@@ -14,6 +14,7 @@ import type { AutomationService } from '../automations/service.js'
 import type { ComputerLeaseService } from '../computer/lease.js'
 import type { DurableWorkspace } from '../storage/durable.js'
 import type { ModelResolver } from '../agent/models.js'
+import type { ReplyDecisionExperimentManager } from '../agent/reply-decision.js'
 
 export type AppEnv = { Variables: AppVariables }
 export type ApiApp = Hono<AppEnv>
@@ -26,6 +27,7 @@ export interface ApiDependencies {
   composio: ComposioService
   automationService: AutomationService
   modelResolver: ModelResolver
+  replyDecisionManager: ReplyDecisionExperimentManager
   db: Database
   config: Config
   computer: ComputerManager

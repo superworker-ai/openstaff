@@ -136,9 +136,10 @@ export function createAgentTools(dependencies: ToolDependencies) {
       inputSchema: z.object({ toBot: z.string(), brief: z.string().min(1), taskId: z.string().optional() }),
       contextSchema: toolContextSchema,
       execute: async ({ toBot, brief, taskId }, { context }) => {
+        const targetName = toBot.trim().replace(/^@/, '') // Models commonly include mention syntax in tool arguments.
         const target = (await db.select({ bot: bots }).from(roomMembers).innerJoin(bots, eq(roomMembers.memberId, bots.id)).where(and(
           eq(roomMembers.roomId, context.roomId), eq(roomMembers.memberKind, 'bot'),
-        ))).find(({ bot }) => bot.id === toBot || bot.slug.toLowerCase() === toBot.toLowerCase() || bot.name.toLowerCase() === toBot.toLowerCase())?.bot
+        ))).find(({ bot }) => bot.id === targetName || bot.slug.toLowerCase() === targetName.toLowerCase() || bot.name.toLowerCase() === targetName.toLowerCase())?.bot
         if (!target) throw new Error('Target bot is not a member of this room')
         const now = new Date().toISOString()
         let resolvedTaskId = taskId

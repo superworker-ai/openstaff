@@ -1,6 +1,6 @@
 import { createFileRoute, Link, redirect } from '@tanstack/react-router'
 import { createServerFn } from '@tanstack/react-start'
-import { Bot, Clock, Cpu, KeyRound, Monitor, Plug, Puzzle, SunMoon, type LucideIcon } from 'lucide-react'
+import { Bot, Clock, Cpu, FlaskConical, KeyRound, Monitor, Plug, Puzzle, SunMoon, type LucideIcon } from 'lucide-react'
 import { Fragment, type ReactNode } from 'react'
 import type { User } from '@openstaff/shared'
 import { serverApi } from '../lib/server-api'
@@ -13,13 +13,14 @@ import { Computer } from '../components/settings/Computer'
 import { Bots } from '../components/settings/Bots'
 import { Automations } from '../components/settings/Automations'
 import { Appearance } from '../components/settings/Appearance'
+import { Experimental } from '../components/settings/Experimental'
 import { PageFrame } from '../components/PageFrame'
 
 const loadWorkspace = createServerFn({ method: 'GET' }).handler(() => serverApi<{ workspace: WorkspaceSettings }>('/api/workspace'))
-const settingsSectionIds = ['providers', 'models', 'appearance', 'plugins', 'connections', 'automations', 'computer', 'bots'] as const
+const settingsSectionIds = ['providers', 'models', 'appearance', 'plugins', 'connections', 'automations', 'computer', 'bots', 'experimental'] as const
 type SettingsSection = typeof settingsSectionIds[number]
 type SettingsRenderProps = { workspace: WorkspaceSettings; user: User }
-type SettingsEntry = { id: SettingsSection; label: string; icon: LucideIcon; group: 'Workspace' | 'Integrations' | 'Runtime' | 'Team'; render: (props: SettingsRenderProps) => ReactNode }
+type SettingsEntry = { id: SettingsSection; label: string; icon: LucideIcon; group: 'Workspace' | 'Integrations' | 'Runtime' | 'Team' | 'Labs'; render: (props: SettingsRenderProps) => ReactNode }
 const settingsSections = [
   { id: 'providers', label: 'Providers', icon: KeyRound, group: 'Workspace', render: ({ user }: SettingsRenderProps) => <Providers owner={user.role === 'owner'} /> },
   { id: 'models', label: 'Models', icon: Cpu, group: 'Workspace', render: ({ workspace }: SettingsRenderProps) => <Models initial={workspace} /> },
@@ -29,6 +30,7 @@ const settingsSections = [
   { id: 'automations', label: 'Automations', icon: Clock, group: 'Runtime', render: () => <Automations /> },
   { id: 'computer', label: 'Computer', icon: Monitor, group: 'Runtime', render: ({ user }: SettingsRenderProps) => <Computer owner={user.role === 'owner'} /> },
   { id: 'bots', label: 'Bots', icon: Bot, group: 'Team', render: () => <Bots /> },
+  { id: 'experimental', label: 'Experimental', icon: FlaskConical, group: 'Labs', render: ({ user }: SettingsRenderProps) => <Experimental owner={user.role === 'owner'} /> },
 ] as const satisfies readonly SettingsEntry[]
 const isSettingsSection = (value: unknown): value is SettingsSection => typeof value === 'string' && settingsSectionIds.some((id) => id === value)
 export const Route = createFileRoute('/settings')({
