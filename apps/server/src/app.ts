@@ -15,6 +15,7 @@ import { AdmissionService } from './rooms/admission.js'
 import { AgentRuntime } from './agent/runtime.js'
 import { resolveModel, type ModelResolver } from './agent/models.js'
 import { ReplyDecisionExperimentManager, type ReplyDecisionExperiment } from './agent/reply-decision.js'
+import { BrowserActionExperimentManager, type BrowserActionExperiment } from './browser/jev-actions.js'
 import { TurnScheduler } from './rooms/scheduler.js'
 import { requireAuth } from './auth/session.js'
 import { authRoutes } from './api/auth.js'
@@ -54,6 +55,7 @@ export interface CreateApplicationOptions {
   modelResolver?: ModelResolver
   workspaceStore?: WorkspaceStore
   replyDecisionExperiment?: ReplyDecisionExperiment
+  browserActionExperiment?: BrowserActionExperiment
 }
 
 export interface Application {
@@ -86,9 +88,13 @@ export async function createApplication(options: CreateApplicationOptions = {}):
   // Settings own the experiment, so it is built after the database and key store exist and is
   // rebuilt in place whenever Settings change. No restart, and no boot-time environment reads.
   const replyDecisionManager = new ReplyDecisionExperimentManager(config.dataDir)
+  const browserActionManager = new BrowserActionExperimentManager(config.dataDir)
   const workspaceRow = (await database.db.select().from(workspace).where(eq(workspace.id, 'workspace')).limit(1))[0]
-  await replyDecisionManager.configure(readExperimentalSettings(workspaceRow?.settings).jev, keys.get('typesafe'))
+  const experimental = readExperimentalSettings(workspaceRow?.settings)
+  await replyDecisionManager.configure(experimental.jev, keys.get('typesafe'))
+  await browserActionManager.configure(experimental.jevBrowser, keys.get('typesafe'))
   const replyDecisionExperiment = options.replyDecisionExperiment ? () => options.replyDecisionExperiment : () => replyDecisionManager.get()
+  const browserActionExperiment = options.browserActionExperiment ? () => options.browserActionExperiment : () => browserActionManager.get()
   const registry = new PluginRegistry(database.db, secrets, config.publicAppUrl)
   await registry.rebuild()
   const installer = new PluginInstaller(database.db, config.dataDir, secrets, registry)
@@ -97,10 +103,10 @@ export async function createApplication(options: CreateApplicationOptions = {}):
   const modelResolver: ModelResolver = options.modelResolver ?? ((id, resolve) => resolveModel(id, keys, resolve))
   const compactor = new RoomCompactor(database.db, modelResolver, config.contextMessages)
   const browser = new BrowserService(config.dataDir, () => computer.desktop(), undefined, undefined, { lease })
-  const runtime = new AgentRuntime({ browser, db: database.db, computer, durable, admission, hub, registry, composio, automationService, contextMessages: config.contextMessages, modelResolver, replyDecisionExperiment })
+  const runtime = new AgentRuntime({ browser, db: database.db, computer, durable, admission, hub, registry, composio, automationService, contextMessages: config.contextMessages, modelResolver, replyDecisionExperiment, browserActionExperiment })
   const scheduler = new TurnScheduler(database.db, runtime, admission, hub, config.maxConcurrentTurns, compactor)
   admission.setTurnEnqueuer((newTurns) => scheduler.enqueue(newTurns))
-  const dependencies: ApiDependencies = { db: database.db, config, computer, durable, lease, admission, scheduler, hub, secrets, keys, registry, installer, composio, automationService, modelResolver, replyDecisionManager }
+  const dependencies: ApiDependencies = { db: database.db, config, computer, durable, lease, admission, scheduler, hub, secrets, keys, registry, installer, composio, automationService, modelResolver, replyDecisionManager, browserActionManager }
   const connectionHealth = new ConnectionHealth(registry.oauth, hub)
   const app = new Hono<AppEnv>()
 
@@ -148,7 +154,7 @@ export async function createApplication(options: CreateApplicationOptions = {}):
   composio.start()
   const expiryTimer = setInterval(() => { void expireApprovals(database.db, hub, Date.now(), admission).catch(() => console.warn('Approval expiry failed')) }, 60_000)
   expiryTimer.unref()
-  return { app, config, database, dependencies, close: async () => { clearInterval(expiryTimer); composio.stop(); await connectionHealth.stop(); automationService.stop(); lease.close(); await scheduler.shutdown(); await replyDecisionManager.close(); await compactor.close(); await browser.close(); await computer.close(); await registry.mcpPool.close(); hub.close(); database.close() } }
+  return { app, config, database, dependencies, close: async () => { clearInterval(expiryTimer); composio.stop(); await connectionHealth.stop(); automationService.stop(); lease.close(); await scheduler.shutdown(); await replyDecisionManager.close(); await browserActionManager.close(); await compactor.close(); await browser.close(); await computer.close(); await registry.mcpPool.close(); hub.close(); database.close() } }
 }
 
 export interface RunningServer extends Application {

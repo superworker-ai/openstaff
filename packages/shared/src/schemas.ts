@@ -66,9 +66,33 @@ export const jevExperimentPatchSchema = z.object({
   timeoutMs: jevExperimentFields.timeoutMs.optional(),
   roomIds: jevExperimentFields.roomIds.optional(),
 }).strict()
-export const experimentalSettingsSchema = z.object({ jev: jevExperimentSchema.prefault({}) })
+/** The browser-action experiment shares the TypeSafe key with the reply experiment but nothing else. */
+const jevBrowserExperimentFields = {
+  mode: z.enum(['off', 'shadow']),
+  model: z.string().trim().min(1).max(64),
+  timeoutMs: z.number().int().min(200).max(6000),
+  minConfidence: z.number().min(0).max(1),
+  roomIds: z.array(z.string().trim().min(1)).max(50),
+}
+export const jevBrowserExperimentSchema = z.object({
+  mode: jevBrowserExperimentFields.mode.default('off'),
+  model: jevBrowserExperimentFields.model.default('jev-latest'),
+  timeoutMs: jevBrowserExperimentFields.timeoutMs.default(2000),
+  minConfidence: jevBrowserExperimentFields.minConfidence.default(0.35),
+  roomIds: jevBrowserExperimentFields.roomIds.default([]),
+})
+export const jevBrowserExperimentPatchSchema = z.object({
+  mode: jevBrowserExperimentFields.mode.optional(),
+  model: jevBrowserExperimentFields.model.optional(),
+  timeoutMs: jevBrowserExperimentFields.timeoutMs.optional(),
+  minConfidence: jevBrowserExperimentFields.minConfidence.optional(),
+  roomIds: jevBrowserExperimentFields.roomIds.optional(),
+}).strict()
+export const experimentalSettingsSchema = z.object({ jev: jevExperimentSchema.prefault({}), jevBrowser: jevBrowserExperimentSchema.prefault({}) })
 export type JevExperimentSettings = z.infer<typeof jevExperimentSchema>
 export type JevExperimentPatch = z.infer<typeof jevExperimentPatchSchema>
+export type JevBrowserExperimentSettings = z.infer<typeof jevBrowserExperimentSchema>
+export type JevBrowserExperimentPatch = z.infer<typeof jevBrowserExperimentPatchSchema>
 export type ExperimentalSettings = z.infer<typeof experimentalSettingsSchema>
 
 /** Never throws: an absent or malformed `experimental` block reads as the defaults. */

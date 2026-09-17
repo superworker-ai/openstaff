@@ -22,6 +22,8 @@ Open **Settings → Experimental → Jev reply decisions** as the workspace owne
 
 An empty room list includes all rooms when shadow mode is enabled. Saving a key alone does not enable the experiment, and saving Shadow without any key is refused. There is deliberately no active mode in this first experiment.
 
+The same key is shared with the Jev browser-actions experiment (`docs/JEV_COMPUTER_USE_EXPERIMENT.md`); enabling one does not enable the other.
+
 `TYPESAFE_API_KEY` in the server environment still works as a fallback for the key only; a saved key takes precedence, and the section shows which source is in use. `JEV_REPLY_MODE`, `JEV_MODEL`, `JEV_REPLY_TIMEOUT_MS`, and `JEV_REPLY_ROOM_IDS` are no longer read by the server. A leftover `JEV_REPLY_MODE` logs one warning at startup and is otherwise ignored.
 
 Only optional replies that reach the existing decision call are observed. A human using a bot's name or slug as a standalone word now creates a direct turn, just like an explicit at-name mention, so those turns bypass the reply decision. Direct messages, explicit bot handoffs, system automation turns, and the scheduler's final-responder fallback also bypass it. Ordinary bot messages do not create new bot turns, and explicit handoffs still stop at the existing depth limit. Later optional bots continue to see earlier replies to the same trigger. This experiment does not introduce autonomous conversation loops.

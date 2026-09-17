@@ -14,6 +14,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "experiment:jev-rooms": "pnpm --filter server exec tsx src/experiments/jev-room-replies.ts",
+    "experiment:jev-computer": "pnpm --filter server exec tsx src/experiments/jev-computer-use.ts",
     "computer:build": "docker build -t superworkers/computer:local docker/computer",
     "db:migrate": "pnpm --filter server db:migrate",
     "doctor": "pnpm --filter server run doctor",

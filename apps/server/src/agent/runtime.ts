@@ -4,6 +4,8 @@ import { z } from 'zod'
 import { connectionPath, createId, MESSAGE_DELTA_INTERVAL_MS, type AppConnection, type Approval, type ComputerProviderId, type JsonValue, type Turn } from '@openstaff/shared'
 import type { BrowserService, BrowserSession } from '../browser/service.js'
 import { browserTools } from '../browser/tools.js'
+import type { BrowserActionExperiment } from '../browser/jev-actions.js'
+import { observedBrowserTools } from '../browser/observed-tools.js'
 import type { Computer } from '../computer/types.js'
 import type { Database } from '../db/index.js'
 import { approvals, bots, messages, roomMembers, turns, workspace } from '../db/schema.js'
@@ -94,6 +96,8 @@ export interface AgentRuntimeOptions {
   modelResolver?: ModelResolver
   /** A getter, so a hot-swapped experiment instance is picked up on the next decision. */
   replyDecisionExperiment?: () => ReplyDecisionExperiment | undefined
+  /** Same contract: shadow observation of the browser actions this turn takes. */
+  browserActionExperiment?: () => BrowserActionExperiment | undefined
 }
 
 export class AgentRuntime {
@@ -160,6 +164,19 @@ export class AgentRuntime {
     finally { if (!waiting) await this.options.browser?.finish(turn.id); await mcp.close() }
   }
 
+  /** Identical tools unless the browser-action experiment covers this room; observation never changes a call. */
+  private async observedBrowser(browser: BrowserSession, turn: Turn, signal?: AbortSignal): Promise<ReturnType<typeof browserTools>> {
+    const tools = browserTools(browser)
+    const experiment = this.options.browserActionExperiment?.()
+    if (!experiment?.applies(turn.roomId) || !turn.triggerMessageId) return tools
+    const trigger = (await this.options.db.select({ text: messages.text }).from(messages).where(eq(messages.id, turn.triggerMessageId)).limit(1))[0]
+    return observedBrowserTools(tools, {
+      experiment, session: browser, signal,
+      context: { roomId: turn.roomId, turnId: turn.id, botId: turn.botId },
+      goal: (trigger?.text ?? '').slice(0, 1_024),
+    })
+  }
+
   private async runWithTools(turn: Turn, externalTools: ToolSet, readOnly: Set<string>, recorder: TurnEventRecorder, browser?: BrowserSession, signal?: AbortSignal, missingConnection?: (name: string) => Promise<AppConnection | undefined>, hiddenApps: string[] = []): Promise<RunResult> {
     const { db, computer, admission, hub } = this.options
     const bot = (await db.select().from(bots).where(eq(bots.id, turn.botId)).limit(1))[0]
@@ -181,7 +198,7 @@ export class AgentRuntime {
       ...createAgentTools({ db, computer, durable: this.options.durable, admission, hub, registry: this.options.registry }),
       ...externalTools,
       ...connections.tools(),
-      ...(browser ? browserTools(browser) : {}),
+      ...(browser ? await this.observedBrowser(browser, turn, signal) : {}),
       ...desktopTools,
       ...(this.options.composio && hasConnectedToolkits ? composioTools(this.options.composio) : {}),
       ...(this.options.automationService ? automationTools(this.options.automationService) : {}),

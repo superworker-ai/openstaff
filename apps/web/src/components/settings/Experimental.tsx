@@ -14,12 +14,30 @@ type JevState = {
   keySource: 'settings' | 'env' | null
   observations: { count: number; lastAt: string | null }
 }
+type JevBrowserState = {
+  mode: JevMode
+  model: string
+  timeoutMs: number
+  minConfidence: number
+  roomIds: string[]
+  observations: { count: number; lastAt: string | null }
+}
 type Draft = { mode: JevMode; model: string; timeoutMs: string; roomIds: string; apiKey: string; clearKey: boolean }
+type BrowserDraft = { mode: JevMode; model: string; timeoutMs: string; minConfidence: string; roomIds: string }
 
 const modeOptions: Array<{ value: JevMode; label: string; description: string }> = [
   { value: 'off', label: 'Off', description: 'Off uses only the current reply model.' },
   { value: 'shadow', label: 'Shadow', description: 'Shadow calls Jev in the background for every optional reply and writes a comparison log. No user-visible change.' },
 ]
+
+const browserModeOptions: Array<{ value: JevMode; label: string; description: string }> = [
+  { value: 'off', label: 'Off', description: 'Off leaves browser actions entirely to the current model.' },
+  { value: 'shadow', label: 'Shadow', description: 'Shadow asks Jev next to every real browser action and writes a comparison log. No user-visible change.' },
+]
+
+function browserDraftOf(state: JevBrowserState): BrowserDraft {
+  return { mode: state.mode, model: state.model, timeoutMs: String(state.timeoutMs), minConfidence: String(state.minConfidence), roomIds: state.roomIds.join(', ') }
+}
 
 function draftOf(jev: JevState): Draft {
   return { mode: jev.mode, model: jev.model, timeoutMs: String(jev.timeoutMs), roomIds: jev.roomIds.join(', '), apiKey: '', clearKey: false }
@@ -27,7 +45,7 @@ function draftOf(jev: JevState): Draft {
 
 export function Experimental({ owner }: { owner: boolean }) {
   const client = useQueryClient()
-  const query = useQuery({ queryKey: ['experimental-settings'], queryFn: () => api<{ jev: JevState }>('/api/workspace/experimental') })
+  const query = useQuery({ queryKey: ['experimental-settings'], queryFn: () => api<{ jev: JevState; jevBrowser: JevBrowserState }>('/api/workspace/experimental') })
   const [draft, setDraft] = useState<Draft | null>(null)
   const [saved, setSaved] = useState(false)
   const action = useAction()
@@ -99,6 +117,7 @@ export function Experimental({ owner }: { owner: boolean }) {
           </div>
           {current.clearKey && <span className="text-xs text-fg-muted">Saved key will be cleared. An environment key may still apply.</span>}
         </label>
+        <p className="mt-1 text-xs text-fg-subtle">Shared with Jev browser actions.</p>
 
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <label className="block text-sm font-medium">Timeout (ms)
@@ -125,5 +144,81 @@ export function Experimental({ owner }: { owner: boolean }) {
       </>}
       <ErrorText error={action.error || query.error?.message} />
     </Section>
+    <JevBrowserActions owner={owner} state={query.data?.jevBrowser} keyAvailable={keyAvailable} loading={query.isLoading} refresh={async () => { await query.refetch() }} />
   </div>
+}
+
+function JevBrowserActions({ owner, state, keyAvailable, loading, refresh }: { owner: boolean; state?: JevBrowserState; keyAvailable: boolean; loading: boolean; refresh: () => Promise<void> }) {
+  const [draft, setDraft] = useState<BrowserDraft | null>(null)
+  const [saved, setSaved] = useState(false)
+  const action = useAction()
+  const current = draft ?? (state ? browserDraftOf(state) : null)
+  const edit = (patch: Partial<BrowserDraft>) => { if (current) { setSaved(false); setDraft({ ...current, ...patch }) } }
+  const changed = Boolean(state && current && JSON.stringify(current) !== JSON.stringify(browserDraftOf(state)))
+  const save = () => action.run(async () => {
+    if (!current) return
+    await api('/api/workspace/experimental', {
+      method: 'PUT',
+      body: JSON.stringify({ jevBrowser: {
+        mode: current.mode, model: current.model.trim(), timeoutMs: Number(current.timeoutMs), minConfidence: Number(current.minConfidence),
+        roomIds: current.roomIds.split(',').map((id) => id.trim()).filter(Boolean),
+      } }),
+    })
+    setDraft(null)
+    setSaved(true)
+    await refresh()
+  })
+
+  return <Section title="Jev browser actions">
+    <p className="mb-5 text-sm text-fg-muted">
+      Uses Jev to pick the next browser action from the controls on the page, in about 300 ms. Shadow mode asks Jev alongside every real click, type, and back action a bot makes and logs whether it agrees; it never changes what the bot does.
+    </p>
+    {!current ? <p className="text-sm text-fg-muted">{loading ? 'Loading…' : 'Unavailable.'}</p> : <>
+      <div role="radiogroup" aria-label="Jev browser action mode" className="space-y-2">
+        {browserModeOptions.map((option) => <button
+          key={option.value}
+          type="button"
+          role="radio"
+          aria-checked={current.mode === option.value}
+          data-testid={`jev-browser-mode-${option.value}`}
+          disabled={!owner}
+          onClick={() => edit({ mode: option.value })}
+          className={`block w-full rounded-md border p-3 text-left disabled:opacity-60 ${current.mode === option.value ? 'border-fg bg-surface-3' : 'border-line-strong hover:bg-surface-3'}`}
+        >
+          <span className="block text-sm font-medium text-fg">{option.label}</span>
+          <span className="mt-1 block text-xs text-fg-muted">{option.description}</span>
+        </button>)}
+      </div>
+      {current.mode === 'shadow' && !keyAvailable && <p className="mt-3 text-xs text-danger">Add a TypeSafe API key under Jev reply decisions to enable shadow mode</p>}
+
+      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <label className="block text-sm font-medium">Timeout (ms)
+          <input disabled={!owner} type="number" min={200} max={6000} aria-label="Jev browser timeout in milliseconds" value={current.timeoutMs} onChange={(event) => edit({ timeoutMs: event.target.value })} className={inputClass} />
+        </label>
+        <label className="block text-sm font-medium">Model
+          <input disabled={!owner} type="text" aria-label="Jev browser model" placeholder="jev-latest" value={current.model} onChange={(event) => edit({ model: event.target.value })} className={inputClass} />
+        </label>
+      </div>
+
+      <label className="mt-4 block text-sm font-medium">Min confidence
+        <input disabled={!owner} type="number" min={0} max={1} step={0.05} aria-label="Jev minimum confidence" value={current.minConfidence} onChange={(event) => edit({ minConfidence: event.target.value })} className={inputClass} />
+        <span className="text-xs text-fg-muted">Decisions below this confidence are logged as low confidence.</span>
+      </label>
+
+      <label className="mt-4 block text-sm font-medium">Room IDs
+        <textarea disabled={!owner} rows={2} aria-label="Browser action room IDs" value={current.roomIds} onChange={(event) => edit({ roomIds: event.target.value })} className={inputClass} />
+        <span className="text-xs text-fg-muted">Comma-separated. Empty means every room.</span>
+      </label>
+
+      <p className="mt-5 text-sm text-fg-muted">
+        {state?.observations.count ?? 0} observations logged{state?.observations.lastAt ? ` · Last ${relativeTime(state.observations.lastAt)}` : ''}
+      </p>
+      <p className="mt-1 text-xs text-fg-subtle"><code>data/experiments/jev-browser-actions.jsonl</code></p>
+
+      {owner
+        ? <button type="button" disabled={action.busy || !changed} onClick={save} className={`${buttonClass} mt-5`}>{saved && !changed ? 'Saved' : 'Save'}</button>
+        : <p className="mt-5 text-sm text-fg-muted">Your workspace owner manages experimental features.</p>}
+    </>}
+    <ErrorText error={action.error} />
+  </Section>
 }

@@ -13,7 +13,8 @@ export function browserTools(session: BrowserSession) {
     try { return await session.run(operation, newTab) } catch (error) { return { error: error instanceof Error ? error.message : String(error) } }
   }
   const locator = async ({ ref, selector }: { ref?: string; selector?: string }) => {
-    if (ref && !/^e\d+$/.test(ref)) throw new Error('Invalid ref; take a fresh browser_snapshot')
+    // Playwright qualifies refs with a frame ordinal (f1e4) after a document navigation.
+    if (ref && !/^(f\d+)?e\d+$/.test(ref)) throw new Error('Invalid ref; take a fresh browser_snapshot')
     return (await session.getPage()).locator(ref ? `aria-ref=${ref}` : selector!)
   }
   return {

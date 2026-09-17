@@ -355,11 +355,7 @@ then `x-forwarded-proto`/`x-forwarded-host`, then the request URL, so a proxied 
 not build an `http://` postMessage target the `https://` opener would drop. Linking first
 deletes the toolkit's `INITIATED`, `FAILED`, and `EXPIRED` accounts (never `ACTIVE`), so
 repeated Reconnects stop accumulating accounts; saving a Composio key validates it with one
-listing and clears it on rejection. Linking a toolkit with no existing auth config creates one:
-Composio-managed when the toolkit offers a managed scheme, otherwise a workspace-owned config
-for the toolkit's first non-OAuth scheme (API key, bearer, basic) with empty credentials, which
-makes Composio's hosted connect page collect the key from the person linking. A toolkit that
-only supports a custom OAuth client fails with a message pointing at the Composio dashboard.
+listing and clears it on rejection.
 
 `POST /api/rooms/:id/connect { app }` resolves shared aliases, reuses a pending room
 connection request, or creates a system card and a non-model approval turn. Composer
@@ -403,7 +399,9 @@ writes and never echo the key, reporting only `keyConfigured` and `keySource`. A
 `ReplyDecisionExperimentManager` owns the live instance: `PUT` persists the settings and then calls
 `configure`, which builds the replacement, swaps it in, and closes the previous instance so
 in-flight observations drain. `AgentRuntime` reads the experiment through a getter, so a swap takes
-effect on the next reply decision without a restart.
+effect on the next reply decision without a restart. A second, script-only Jev experiment lives in
+`apps/server/src/browser/jev-actions.ts` and is documented in `docs/JEV_COMPUTER_USE_EXPERIMENT.md`;
+it has no Settings surface and never runs inside a turn.
 
 Phase 2 implementation notes:
 - Plugin variables and provider keys use AES-256-GCM with a random nonce for each value.

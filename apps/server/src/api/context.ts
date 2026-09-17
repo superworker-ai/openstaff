@@ -15,6 +15,7 @@ import type { ComputerLeaseService } from '../computer/lease.js'
 import type { DurableWorkspace } from '../storage/durable.js'
 import type { ModelResolver } from '../agent/models.js'
 import type { ReplyDecisionExperimentManager } from '../agent/reply-decision.js'
+import type { BrowserActionExperimentManager } from '../browser/jev-actions.js'
 
 export type AppEnv = { Variables: AppVariables }
 export type ApiApp = Hono<AppEnv>
@@ -28,6 +29,7 @@ export interface ApiDependencies {
   automationService: AutomationService
   modelResolver: ModelResolver
   replyDecisionManager: ReplyDecisionExperimentManager
+  browserActionManager: BrowserActionExperimentManager
   db: Database
   config: Config
   computer: ComputerManager

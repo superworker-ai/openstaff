@@ -297,6 +297,12 @@ export class BrowserSession {
     this.currentPage = undefined
   }
 
+  /** Page identity for decision state. Added for the bounded-action experiment; no behaviour change to existing calls. */
+  async location(): Promise<{ url: string; title: string }> {
+    const page = await this.getPage()
+    return { url: page.url(), title: await page.title() }
+  }
+
   async snapshot(): Promise<string> {
     return Buffer.from(await (await this.getPage()).ariaSnapshot({ mode: 'ai' })).subarray(0, 12 * 1024).toString()
   }
