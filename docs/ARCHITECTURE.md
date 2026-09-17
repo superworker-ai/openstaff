@@ -339,11 +339,23 @@ it responds to popup completion messages, with two-second polling as a fallback.
 and `/connect/<pluginId>/<server>?approval=<id>` in a 520×720 popup. Callback errors are stored
 for the dialog and translated into plain language. Verified callbacks auto-approve matching
 pending connection requests and enqueue the turn once; inactive accounts cannot approve.
-Composio links use `/api/connections/callback?approval=<id>` and re-fetch ACTIVE status.
-Both callbacks render a nonce-protected page posting `{ type: 'openstaff:connected',
-app, approvalId }` to the configured same-origin opener and closing. Without an opener
-they show a completion message. The parent validates both origin and popup source;
-`approval.updated` also resolves cards without navigation.
+Composio links use `/api/connections/callback?approval=<id>` and re-fetch ACTIVE status,
+retrying four times 600 ms apart because Composio redirects before the account flips to
+ACTIVE. Both callbacks render a nonce-protected page posting `{ type: 'openstaff:connected',
+app, approvalId }` to the same-origin opener, then close unconditionally: an identity
+provider sending `Cross-Origin-Opener-Policy` nulls `opener` for good, and a popup can
+still close itself. A window that survives reveals a "Return to OpenStaff" link. The parent
+validates both origin and popup source; `approval.updated` also resolves cards without
+navigation. Every popup-rendered failure — an unknown or spent request, a rejected Composio
+key, a missing OAuth state, a verification that never went active — is a themed failure page
+(`connectionFailurePopup`) with the plain-language reason, a Try again link, and a Close
+button, never JSON or the app shell. Popup pages inline their own dark/light styles under a
+nonce'd `style-src`. `publicOrigin` resolves the browser-visible origin from `PUBLIC_APP_URL`,
+then `x-forwarded-proto`/`x-forwarded-host`, then the request URL, so a proxied deploy does
+not build an `http://` postMessage target the `https://` opener would drop. Linking first
+deletes the toolkit's `INITIATED`, `FAILED`, and `EXPIRED` accounts (never `ACTIVE`), so
+repeated Reconnects stop accumulating accounts; saving a Composio key validates it with one
+listing and clears it on rejection.
 
 `POST /api/rooms/:id/connect { app }` resolves shared aliases, reuses a pending room
 connection request, or creates a system card and a non-model approval turn. Composer

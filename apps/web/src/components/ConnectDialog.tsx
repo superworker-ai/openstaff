@@ -23,7 +23,7 @@ function ManualClient({ server, onSave, busy }: { server: PluginServerAuth; onSa
   </form>
 }
 
-export function ConnectDialog({ pluginId, serverName, approvalId, standalone = false, onClose }: { pluginId: string; serverName?: string; approvalId?: string; standalone?: boolean; onClose?: () => void }) {
+export function ConnectDialog({ pluginId, serverName, approvalId, standalone = false, initialError, onClose }: { pluginId: string; serverName?: string; approvalId?: string; standalone?: boolean; initialError?: string; onClose?: () => void }) {
   useConnectionUpdates()
   const query = useQuery({ queryKey: ['plugin-servers', pluginId], queryFn: () => api<{ servers: PluginServerAuth[] }>(`/api/plugins/${encodeURIComponent(pluginId)}/servers`), refetchInterval: 2000 })
   const [selected, setSelected] = useState(serverName), [editClient, setEditClient] = useState(false), action = useAction()
@@ -32,7 +32,9 @@ export function ConnectDialog({ pluginId, serverName, approvalId, standalone = f
     if (!standalone || !server?.connected) return
     if (approvalId && !new URLSearchParams(location.search).has('connected')) { location.replace(`/api/connections/complete?approval=${encodeURIComponent(approvalId)}`); return }
     if (!new URLSearchParams(location.search).has('connected')) return
-    if (window.opener) { window.opener.postMessage({ type: 'openstaff:connected', app: server.name, approvalId }, location.origin); window.close() }
+    // An identity provider sending COOP nulls `opener` for good; a popup can still close itself.
+    if (window.opener) window.opener.postMessage({ type: 'openstaff:connected', app: server.name, approvalId }, location.origin)
+    window.close()
   }, [standalone, server?.connected, server?.name, approvalId])
   const connect = (clientId?: string, clientSecret?: string) => {
     let popup: Window | null = null
@@ -58,7 +60,7 @@ export function ConnectDialog({ pluginId, serverName, approvalId, standalone = f
         ? <ManualClient server={server} onSave={connect} busy={action.busy} />
         : <div className="mt-5"><p className="mb-5 text-sm text-fg-muted">Sign in to {server.name} to give your teammates access. Your conversation will continue when you finish.</p><button disabled={action.busy || server.auth === 'unknown'} className={buttonClass} onClick={() => connect()}>Connect {server.name}</button></div>)}
     {server?.auth === 'manual-client' && !server.needsClientCredentials && !editClient && <button className="mt-4 block text-xs underline" onClick={() => setEditClient(true)}>Edit OAuth client</button>}
-    <ErrorText error={action.error || query.error?.message || server?.error || undefined} />
+    <ErrorText error={action.error || query.error?.message || server?.error || initialError || undefined} />
   </>
   if (standalone) return <main className="flex min-h-screen items-center justify-center bg-app p-6"><div className="w-full max-w-lg rounded-lg border border-line-strong bg-surface-2 p-7 shadow-popover">{body}</div></main>
   return <Dialog open><DialogContent label="Connect app" className="p-7">{body}</DialogContent></Dialog>

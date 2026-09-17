@@ -4,8 +4,10 @@ import { api } from './api'
 const popups = new Set<Window>()
 export function openConnectionPopup(url = 'about:blank') {
   for (const popup of popups) if (popup.closed) popups.delete(popup)
-  const popup = window.open(url, '_blank', 'popup,width=520,height=720')
+  // One named window: a second click reuses (and re-focuses) the same Window object, so the set still matches its messages.
+  const popup = window.open(url, 'openstaff-connect', 'popup,width=520,height=720')
   if (!popup) throw new Error('Allow popups to connect this app')
+  popup.focus()
   popups.add(popup)
   return popup
 }

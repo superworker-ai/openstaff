@@ -48,6 +48,11 @@ export function workspaceRoutes({ db, keys, registry, composio, computer, config
     if (config.managedKeys && MANAGED_PROVIDERS.some((provider) => input[provider] !== undefined)) return c.json({ error: 'Model and Composio keys are managed by your host', code: 'managed_keys' }, 403)
     await keys.set(input)
     if (input.composio !== undefined) composio.refreshCatalog()
+    // A bad Composio key only surfaces later as "Internal server error" inside the connect popup, so reject it here.
+    if (input.composio) {
+      try { await composio.listConnections(true) }
+      catch { await keys.set({ composio: '' }); composio.refreshCatalog(); return c.json({ error: 'Composio rejected that API key.' }, 400) }
+    }
     return c.json({ configured: keys.configured() })
   })
   app.get('/experimental', async (c) => c.json(await experimentalState()))

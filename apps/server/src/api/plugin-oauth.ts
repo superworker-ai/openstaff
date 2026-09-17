@@ -6,9 +6,9 @@ import { connectionError, connectionPath } from '@openstaff/shared'
 import { pluginOAuth } from '../db/schema.js'
 import { connectPluginServer } from '../plugins/oauth.js'
 import type { ApiDependencies, AppEnv } from './context.js'
-import { isResponse, parseBody } from './helpers.js'
+import { isResponse, parseBody, publicOrigin } from './helpers.js'
 import { connectionApproval, resumeConnections } from './connection-resume.js'
-import { connectionPopup } from './connection-popup.js'
+import { connectionFailurePopup, connectionPopup } from './connection-popup.js'
 
 export function pluginOAuthRoutes(dependencies: ApiDependencies) {
   const { db, registry } = dependencies
@@ -16,7 +16,8 @@ export function pluginOAuthRoutes(dependencies: ApiDependencies) {
   app.get('/oauth/callback', async (c) => {
     // Keep this behind requireAuth. The web proxy forwards the Lax session cookie
     // on the authorization server's top-level GET navigation.
-    let returnPath = '/settings'
+    const origin = publicOrigin(c, dependencies.config)
+    let returnPath: string | undefined
     let failedProvider: Awaited<ReturnType<typeof oauth.server>> | undefined
     try {
       const state = c.req.query('state')
@@ -36,10 +37,12 @@ export function pluginOAuthRoutes(dependencies: ApiDependencies) {
       } finally { await provider.invalidateCredentials('verifier') }
       await provider.setError(null)
       await resumeConnections(dependencies, { source: 'mcp', pluginId: row.pluginId, serverName: row.serverName, appName: row.serverName }, c.get('user').id, row.approvalId ?? undefined)
-      return connectionPopup(row.serverName, row.approvalId ?? undefined, dependencies.config.publicAppUrl || c.req.url)
+      return connectionPopup(row.serverName, row.approvalId ?? undefined, origin)
     } catch (error) {
       const message = connectionError(error)
       await failedProvider?.setError(message)
+      // A missing or reused state has no connect page to return to; redirecting would render the app shell in the popup.
+      if (!returnPath) return connectionFailurePopup('this app', message, origin)
       return c.redirect(`${returnPath}${returnPath.includes('?') ? '&' : '?'}error=${encodeURIComponent(message)}`)
     }
   })

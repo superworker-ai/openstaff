@@ -10,11 +10,13 @@ import { mockStream, mockUsage, textStream } from '../test/mock-model.js'
 
 it.each(['request_connection'])('%s gates an unconnected toolkit and the verified callback resumes exactly once with fresh credentials', async (toolName) => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'connections-'))
-  let active = false
+  let active = false, loseRace = false
   const client: ComposioClient = {
-    connections: vi.fn(async () => [{ id: 'account', toolkit: 'gmail', status: active ? 'ACTIVE' : 'INITIATED', createdAt: new Date().toISOString() }]),
+    // `loseRace` reproduces Composio redirecting to the callback a beat before the account flips to ACTIVE.
+    connections: vi.fn(async () => { const status = active && !loseRace ? 'ACTIVE' : 'INITIATED'; loseRace = false; return [{ id: 'account', toolkit: 'gmail', status, createdAt: new Date().toISOString() }] }),
     search: async () => [], metadata: async (slug) => ({ slug, toolkit: 'gmail', description: 'Read Gmail' }),
     execute: vi.fn(async () => ({ inbox: 'Hello' })), link: vi.fn(async () => ({ redirectUrl: 'https://example.com/signin' })),
+    disconnect: vi.fn(async () => ({})),
     toolkits: async () => [{ slug: 'gmail', name: 'Gmail', description: 'Read Gmail' }],
   }
   const model = new MockLanguageModelV3({ doStream: [mockStream([{ type: 'stream-start', warnings: [] }, { type: 'tool-call', toolCallId: 'mail', toolName, input: JSON.stringify(toolName === 'request_connection' ? { app: 'Gmail' } : { slug: 'GMAIL_GET_EMAILS', arguments: {} }) }, { type: 'finish', finishReason: { unified: 'tool-calls', raw: undefined }, usage: mockUsage }]), textStream('Connected and ready.') ] })
@@ -34,14 +36,29 @@ it.each(['request_connection'])('%s gates an unconnected toolkit and the verifie
     const start = await request(`/connections/start?approval=${approval.id}`)
     expect(start.headers.get('location')).toBe('https://example.com/signin')
     expect(client.link).toHaveBeenCalledWith('gmail', expect.stringContaining(`approval=${approval.id}`))
+    // Linking clears the stale INITIATED account instead of stacking another one beside it.
+    expect(client.disconnect).toHaveBeenCalledWith('account')
     const early = await request(`/connections/callback?approval=${approval.id}`)
-    expect(early.headers.get('location')).toContain('error=')
+    expect(early.status).toBe(200)
+    expect(early.headers.get('location')).toBeNull()
+    const earlyHtml = await early.text()
+    expect(earlyHtml).toContain('Could not connect Gmail')
+    expect(earlyHtml).toContain('Try again')
+    expect(earlyHtml).toContain(`/api/connections/start?toolkit=gmail&amp;approval=${approval.id}`)
     expect((await api.database.db.select().from(approvals))[0]?.status).toBe('pending')
-    active = true
+    active = true; loseRace = true
     expect(await (await request(`/connections/callback?approval=${approval.id}`)).text()).toContain('openstaff:connected')
     await vi.waitFor(async () => expect((await api.database.db.select().from(turns))[0]?.status).toBe('done'))
     expect((await api.database.db.select().from(approvals))[0]?.status).toBe('approved')
     expect(client.execute).not.toHaveBeenCalled()
-    expect((await request(`/connections/callback?approval=${approval.id}`)).status).toBe(404)
+    const spent = await request(`/connections/callback?approval=${approval.id}`)
+    expect(spent.status).toBe(200)
+    expect(await spent.text()).toContain('already completed')
+    vi.mocked(client.link).mockRejectedValueOnce(new Error('Composio rejected that API key.'))
+    const broken = await request('/connections/start?toolkit=gmail')
+    expect(broken.status).toBe(200)
+    const brokenHtml = await broken.text()
+    expect(brokenHtml).toContain('Could not connect Gmail')
+    expect(brokenHtml).toContain('Composio rejected that API key.')
   } finally { await api.stop(); await fs.rm(directory, { recursive: true, force: true }) }
 })

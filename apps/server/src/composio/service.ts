@@ -104,8 +104,20 @@ export class ComposioService {
     await client.disconnect(id)
     this.cache = undefined
   }
+  /** Every click used to leave another INITIATED account behind, which Settings then listed as "Error" and disconnect removed one at a time. */
+  private async forgetStale(client: ComposioClient, toolkit: string) {
+    if (!client.disconnect) return
+    try {
+      for (const row of await client.connections()) {
+        if (row.toolkit !== toolkit || !['INITIATED', 'FAILED', 'EXPIRED'].includes(row.status)) continue
+        try { await client.disconnect(row.id) } catch { console.warn(`Composio account ${row.id} could not be removed before linking ${toolkit}`) }
+      }
+    } catch { console.warn(`Composio accounts for ${toolkit} could not be listed before linking`) }
+  }
   async link(toolkit: string, roomId?: string, callbackUrl?: string) {
-    const result = await this.getClient().link(toolkit, callbackUrl)
+    const client = this.getClient()
+    await this.forgetStale(client, toolkit)
+    const result = await client.link(toolkit, callbackUrl)
     if (!['https:', 'http:'].includes(new URL(result.redirectUrl).protocol)) throw new Error('Invalid connection URL')
     this.cache = undefined
     if (roomId) await this.admission.post({ roomId, authorKind: 'system', authorId: null, text: `Connect ${toolkit}: ${result.redirectUrl}`, planReplies: false })

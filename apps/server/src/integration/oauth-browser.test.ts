@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises'
+import { createServer } from 'node:http'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { MockLanguageModelV3 } from 'ai/test'
 import { eq } from 'drizzle-orm'
@@ -7,22 +8,43 @@ import { fakeOAuthServer, writeOAuthPlugin } from '../test/fake-oauth.js'
 import { mockStream, mockUsage, textStream } from '../test/mock-model.js'
 import { oauthClients, plugins, turns } from '../db/schema.js'
 
+/**
+ * Google and other identity providers send `Cross-Origin-Opener-Policy`, which swaps the browsing
+ * context group and nulls `opener` for good. This fixture reproduces that from a second origin and
+ * reports back whether the opener survived.
+ */
+async function coopIdentityProvider() {
+  const state = { severed: false }
+  const server = createServer((req, res) => {
+    const parsed = new URL(req.url!, 'http://127.0.0.1')
+    if (parsed.pathname === '/opener') { state.severed = parsed.searchParams.get('severed') === 'true'; res.writeHead(204); res.end(); return }
+    const next = JSON.stringify(parsed.searchParams.get('next') ?? '/')
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cross-origin-opener-policy': 'same-origin' })
+    res.end(`<!doctype html><title>Sign in</title><script>var next=${next};fetch('/opener?severed='+(window.opener===null)).catch(function(){}).then(function(){location.replace(next)})</script>`)
+  })
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  return { url: `http://127.0.0.1:${(server.address() as { port: number }).port}`, state, stop: () => new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve())) }
+}
+
 describe.skipIf(process.env.SKIP_BROWSER_TESTS === '1')('connection flows in the browser', () => {
   let h: Awaited<ReturnType<typeof browserHarness>>, fake: Awaited<ReturnType<typeof fakeOAuthServer>>, manual: Awaited<ReturnType<typeof fakeOAuthServer>>
+  let idp: Awaited<ReturnType<typeof coopIdentityProvider>>
   let pluginId: string
-  let composioActive = false
+  const composioActive = new Set<string>()
+  let viaCoopIdp = false
   const errors: string[] = []
   let model: MockLanguageModelV3
   beforeAll(async () => {
     fake = await fakeOAuthServer({ dcr: true })
     manual = await fakeOAuthServer()
+    idp = await coopIdentityProvider()
     model = new MockLanguageModelV3({ doStream: [
       mockStream([{ type: 'stream-start', warnings: [] }, { type: 'tool-call', toolCallId: 'connect-mail', toolName: 'request_connection', input: '{"app":"Gmail"}' }, { type: 'finish', finishReason: { unified: 'tool-calls', raw: undefined }, usage: mockUsage }]),
       mockStream([{ type: 'stream-start', warnings: [] }, { type: 'tool-call', toolCallId: 'read-mail', toolName: 'gmail__read_mail', input: '{}' }, { type: 'finish', finishReason: { unified: 'tool-calls', raw: undefined }, usage: mockUsage }]),
       textStream('Your inbox says hello from fake OAuth.'),
     ] })
     h = await browserHarness({ hostname: 'localhost', modelResolver: () => model, composioClient: {
-      connections: async () => composioActive ? [{ id: 'hubspot-account', toolkit: 'hubspot', status: 'ACTIVE', createdAt: new Date().toISOString() }] : [], search: async () => [], metadata: async (slug) => ({ slug, toolkit: 'gmail', description: '' }), execute: async () => ({}), link: async (_toolkit, callback) => { composioActive = true; return { redirectUrl: callback! } },
+      connections: async () => [...composioActive].map((toolkit) => ({ id: `${toolkit}-account`, toolkit, status: 'ACTIVE', createdAt: new Date().toISOString() })), search: async () => [], metadata: async (slug) => ({ slug, toolkit: 'gmail', description: '' }), execute: async () => ({}), link: async (toolkit, callback) => { composioActive.add(toolkit); return { redirectUrl: viaCoopIdp ? `${idp.url}/consent?next=${encodeURIComponent(callback!)}` : callback! } },
       toolkits: async () => [{ slug: 'gmail', name: 'Gmail', description: 'Read, organize, and reply to email.' }, { slug: 'googledrive', name: 'Google Drive', description: 'Find and work with your documents.' }, { slug: 'github', name: 'GitHub', description: 'Work with repositories and issues.' }],
     } })
     h.page.on('pageerror', (error) => errors.push(error.message))
@@ -36,7 +58,7 @@ describe.skipIf(process.env.SKIP_BROWSER_TESTS === '1')('connection flows in the
     await fs.mkdir('/tmp/shots-connections', { recursive: true })
     await fs.mkdir('/tmp/shots-connections-2', { recursive: true })
   }, 40_000)
-  afterAll(async () => { vi.restoreAllMocks(); await h?.stop(); await fake?.stop(); await manual?.stop() })
+  afterAll(async () => { vi.restoreAllMocks(); await h?.stop(); await fake?.stop(); await manual?.stop(); await idp?.stop() })
 
   it('install opens Connect, DCR popup closes, and the dialog receives Connected', async () => {
     const { page, context, url } = h
@@ -178,5 +200,25 @@ describe.skipIf(process.env.SKIP_BROWSER_TESTS === '1')('connection flows in the
       expect(h.page.url()).toBe(`${h.url}/rooms/${room.id}`)
       expect(errors).toEqual([])
     } finally { configured.mockRestore(); vi.unstubAllEnvs() }
+  }, 20_000)
+
+  it('a COOP identity provider severs the opener, the popup still closes, and the card resumes over the WebSocket', async () => {
+    viaCoopIdp = true
+    try {
+      const response = await h.context.request.post(`${h.url}/api/bots`, { data: { name: 'Repo helper', job: 'Code', avatar: { shape: 'circle', color: '#2E90FA' } } })
+      const { room } = await response.json() as { room: { id: string } }
+      await h.context.request.post(`${h.url}/api/rooms/${room.id}/connect`, { data: { app: 'GitHub' } })
+      await h.page.goto(`${h.url}/rooms/${room.id}`, { waitUntil: 'domcontentloaded' })
+      await h.page.locator('body[data-hydrated="true"]').waitFor()
+      const card = h.page.getByTestId('connect-card')
+      const opened = h.context.waitForEvent('page')
+      await card.getByRole('button', { name: 'Connect GitHub', exact: true }).click()
+      const popup = await opened
+      // Two extra navigations (consent page, then the callback) take longer than the one-second default.
+      await vi.waitFor(() => expect(popup.isClosed()).toBe(true), { timeout: 10_000 })
+      expect(idp.state.severed).toBe(true)
+      await card.getByText('Connected · Continuing conversation', { exact: true }).waitFor()
+      expect(errors).toEqual([])
+    } finally { viaCoopIdp = false }
   }, 20_000)
 })
