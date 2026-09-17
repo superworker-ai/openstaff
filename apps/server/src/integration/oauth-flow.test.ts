@@ -11,7 +11,7 @@ afterEach(() => vi.unstubAllEnvs())
 it('HTTP OAuth connect → authenticated callback → MCP tool succeeds; expired token refreshes automatically on 401', async () => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'openstaff-oauth-')), fake = await fakeOAuthServer()
   vi.stubEnv('PUBLIC_APP_URL', '')
-  const api = await startServer({ config: { dataDir: directory, port: 0, signupCode: '' } })
+  const api = await startServer({ config: { dataDir: directory, port: 0, signupCode: '', authSignup: 'open' } })
   // The ephemeral API origin is only known after listen. Providers resolve their
   // redirect at creation; production sets PUBLIC_APP_URL before server startup.
   vi.stubEnv('PUBLIC_APP_URL', api.url)
@@ -76,7 +76,7 @@ it('HTTP OAuth connect → authenticated callback → MCP tool succeeds; expired
 })
 it('HTTP OAuth dynamically registers clients and lets any member start a connection', async () => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'openstaff-oauth-dcr-')), fake = await fakeOAuthServer({ dcr: true })
-  const api = await startServer({ config: { dataDir: directory, port: 0, signupCode: '', publicAppUrl: 'http://localhost:3000' } })
+  const api = await startServer({ config: { dataDir: directory, port: 0, signupCode: '', authSignup: 'open', publicAppUrl: 'http://localhost:3000' } })
   try {
     const signup = async (email: string) => (await fetch(`${api.url}/api/auth/sign-up/email`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email, name: 'User', password: 'password123' }) })).headers.get('set-cookie')!.split(';')[0]!
     const owner = await signup('owner@example.com'), member = await signup('member@example.com')

@@ -8,7 +8,7 @@ import { buildTurnPrompt } from '../agent/prompt.js'
 it('uploads files with jailed paths, labels attachments, cancels once, and reports usage', async () => {
   const directory = await fs.mkdtemp(path.resolve('data-test-upload-'))
   const model = new MockLanguageModelV3({ doStream: (options) => new Promise((_resolve, reject) => { options.abortSignal?.throwIfAborted(); options.abortSignal?.addEventListener('abort', () => reject(new Error('Stopped')), { once: true }) }) })
-  const running = await createApplication({ config: { dataDir: directory }, modelResolver: () => model })
+  const running = await createApplication({ config: { dataDir: directory, authSignup: 'open' }, modelResolver: () => model })
   let cookie = ''
   const request = async (url: string, method = 'GET', body?: unknown) => {
     const response = await running.app.request(url, { method, headers: { cookie, ...(body instanceof FormData ? {} : { 'content-type': 'application/json' }) }, body: body instanceof FormData ? body : body === undefined ? undefined : JSON.stringify(body) })

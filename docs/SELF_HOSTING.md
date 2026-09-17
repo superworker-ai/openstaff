@@ -11,12 +11,36 @@ Self-hosters can ignore the hosted-mode variables. Their defaults select the unr
 `self-hosted` plan with an active workspace, editable provider keys and Computer credentials,
 and no usage export.
 
-Authentication also has development-friendly defaults: sign-up is open and the `console`
-email provider prints verification, password-reset, magic-link, and invitation URLs to
-stdout. For a private deployment, set `AUTH_SIGNUP` to `code` with `SIGNUP_CODE`, or to
-`invite`. Production email can use `smtp` with `SMTP_URL` or `resend` with
-`RESEND_API_KEY`; both require `EMAIL_FROM`. Set `AUTH_TRUSTED_ORIGINS` when browsers use
-origins beyond `PUBLIC_APP_URL`.
+Authentication is closed by default: `AUTH_SIGNUP` is `invite` unless `SIGNUP_CODE` is set,
+in which case it is `code`. The `console` email provider prints verification, password-reset,
+magic-link, and invitation URLs to stdout. Production email can use `smtp` with `SMTP_URL` or
+`resend` with `RESEND_API_KEY`; both require `EMAIL_FROM`. Set `AUTH_TRUSTED_ORIGINS` when
+browsers use origins beyond `PUBLIC_APP_URL`.
+
+### Members and invitations
+
+`AUTH_SIGNUP` has three modes. `invite` (the default) admits only emails holding a live
+invitation. `code` admits anyone who supplies `SIGNUP_CODE`. `open` admits anyone who reaches
+the sign-up page. An invitation always wins: an invited email may register in any mode without
+the code, and arrives with the role it was invited as.
+
+While the users table is empty the login page offers "Create the first account for this
+workspace" whatever the policy says, and that first account becomes the `owner`. If
+`SIGNUP_CODE` is set, the first account must still supply it.
+
+Owners and administrators invite from Settings → Members. Creating an invitation always shows
+the link, with a Copy link button; when `EMAIL_PROVIDER=console` the panel says so and the
+link is the only delivery. With `smtp` or `resend` the same link is emailed. Links live seven
+days. Expired invitations stay in the list, labelled, and Resend rotates the token, clears any
+revocation, and restarts the seven days — the previous link stops working. Revoke retires an
+invitation for good. Invitations are consumed wherever the account is created, so a password,
+magic-link, social, or SSO sign-up with the invited email all settle the invitation.
+
+Roles are `owner`, `admin`, and `member`. There is exactly one owner, who alone manages
+billing, provider keys, the Computer provider, and ownership transfer. Administrators manage
+members, invitations, and SSO. Removing a member passes their bots, rooms, automations, tasks,
+and Computer credentials to the owner and deletes their account; nobody can ban, revoke the
+sessions of, or remove their own account.
 
 ### Single sign-on
 

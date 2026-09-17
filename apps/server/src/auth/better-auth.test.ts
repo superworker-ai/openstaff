@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { createHash } from 'node:crypto'
 import { createServer } from 'node:http'
 import { createClient } from '@libsql/client'
 import { drizzle } from 'drizzle-orm/libsql'
@@ -174,11 +175,98 @@ it('runs an invitation round trip with only a SHA-256 token hash stored', async 
     expect(stored.tokenHash).not.toContain(token!)
     const details = await h.app.request(`http://app.example.test/api/invitations/${token}`)
     expect(await details.json()).toMatchObject({ invitation: { email: 'invitee@example.test', workspaceName: 'OpenStaff' } })
+    // Signing up with the invited email already applies the role and settles the invitation.
     const invitee = await signedIn(h, { email: 'invitee@example.test' })
-    const accepted = await h.app.request(`http://app.example.test/api/invitations/${token}/accept`, { method: 'POST', headers: { cookie: invitee.cookie } })
-    expect(accepted.status).toBe(200)
     expect((await h.database.db.select({ role: users.role }).from(users).where(eq(users.id, invitee.user.id)).limit(1))[0]?.role).toBe('admin')
     expect((await h.database.db.select().from(invitations).where(and(eq(invitations.id, stored.id), isNull(invitations.acceptedAt))))).toHaveLength(0)
+    const accepted = await h.app.request(`http://app.example.test/api/invitations/${token}/accept`, { method: 'POST', headers: { cookie: invitee.cookie } })
+    expect(accepted.status).toBe(404)
+  } finally { h.close() }
+})
+
+it('still accepts an invitation by token for an account that already exists', async () => {
+  const h = await harness({ publicAppUrl: 'http://app.example.test', trustedOrigins: ['http://app.example.test'] })
+  try {
+    const owner = await signedIn(h, { email: 'owner@example.test', role: 'owner' })
+    const member = await signedIn(h, { email: 'member@example.test', role: 'member' })
+    // The create route refuses an email that already has an account, so the row is seeded directly.
+    const token = 'already-registered-token'
+    await h.database.db.insert(invitations).values({ id: createId('invitation'), email: member.user.email, role: 'admin', tokenHash: createHash('sha256').update(token).digest('hex'), invitedBy: owner.user.id, expiresAt: new Date(Date.now() + 60_000).toISOString(), createdAt: new Date().toISOString() })
+    expect((await h.app.request(`http://app.example.test/api/invitations/${token}/accept`, { method: 'POST', headers: { cookie: member.cookie } })).status).toBe(200)
+    expect((await h.database.db.select({ role: users.role }).from(users).where(eq(users.id, member.user.id)).limit(1))[0]?.role).toBe('admin')
+  } finally { h.close() }
+})
+
+interface InviteBody { invitation: { id: string; status: string }; inviteUrl: string; delivery: string }
+const inviteToken = (url: string) => url.slice(url.lastIndexOf('/') + 1)
+
+it('returns the invite link and lets a pending invitation bypass the signup code and carry its role', async () => {
+  const h = await harness({ authSignup: 'code', signupCode: 'join-us', publicAppUrl: 'http://app.example.test', trustedOrigins: ['http://app.example.test'] })
+  try {
+    const ownerResponse = await signup(h.app, 'owner@example.test', { signupCode: 'join-us' })
+    expect(ownerResponse.status).toBe(200)
+    const created = await h.app.request('http://app.example.test/api/invitations', jsonPost({ email: 'Invitee@Example.test', role: 'admin' }, responseCookies(ownerResponse)))
+    expect(created.status).toBe(201)
+    const body = await created.json() as InviteBody
+    expect(body.delivery).toBe('link')
+    expect(body.inviteUrl).toMatch(/^http:\/\/app\.example\.test\/invite\/[\w-]+$/)
+    // The code is never supplied: the invitation alone admits the email, in code mode.
+    expect((await signup(h.app, 'invitee@example.test')).status).toBe(200)
+    expect((await h.database.db.select({ role: users.role }).from(users).where(eq(users.email, 'invitee@example.test')).limit(1))[0]?.role).toBe('admin')
+    expect((await h.database.db.select({ acceptedAt: invitations.acceptedAt }).from(invitations).where(eq(invitations.id, body.invitation.id)).limit(1))[0]?.acceptedAt).toBeTruthy()
+    const events = await h.database.db.select({ event: auditLog.event }).from(auditLog)
+    expect(events.map((row) => row.event)).toContain('member.invite_accepted')
+  } finally { h.close() }
+})
+
+it('consumes a pending invitation on magic-link sign-up', async () => {
+  const h = await harness({ authSignup: 'invite', publicAppUrl: 'http://app.example.test', trustedOrigins: ['http://app.example.test'] })
+  try {
+    const owner = await signedIn(h, { email: 'owner@example.test', role: 'owner' })
+    const created = await h.app.request('http://app.example.test/api/invitations', jsonPost({ email: 'invitee@example.test', role: 'admin' }, owner.cookie))
+    const { invitation } = await created.json() as InviteBody
+    const requested = await h.app.request('http://app.example.test/api/auth/sign-in/magic-link', jsonPost({ email: 'invitee@example.test', callbackURL: '/' }))
+    expect(requested.status).toBe(200)
+    const verified = await h.app.request(h.sent.at(-1)!.text.match(/https?:\/\/\S+/)![0])
+    expect(verified.status).toBe(302)
+    expect((await h.database.db.select({ role: users.role }).from(users).where(eq(users.email, 'invitee@example.test')).limit(1))[0]?.role).toBe('admin')
+    expect((await h.database.db.select({ acceptedAt: invitations.acceptedAt }).from(invitations).where(eq(invitations.id, invitation.id)).limit(1))[0]?.acceptedAt).toBeTruthy()
+  } finally { h.close() }
+})
+
+it('lists expired invitations and resends them with a rotated token', async () => {
+  const h = await harness({ authSignup: 'invite', publicAppUrl: 'http://app.example.test', trustedOrigins: ['http://app.example.test'] })
+  try {
+    const owner = await signedIn(h, { email: 'owner@example.test', role: 'owner' })
+    const created = await h.app.request('http://app.example.test/api/invitations', jsonPost({ email: 'invitee@example.test', role: 'member' }, owner.cookie))
+    const first = await created.json() as InviteBody
+    await h.database.db.update(invitations).set({ expiresAt: new Date(Date.now() - 1000).toISOString() }).where(eq(invitations.id, first.invitation.id))
+    const listed = await h.app.request('http://app.example.test/api/invitations', { headers: { cookie: owner.cookie } })
+    expect(await listed.json()).toMatchObject({ invitations: [{ id: first.invitation.id, status: 'expired' }] })
+    const resent = await h.app.request(`http://app.example.test/api/invitations/${first.invitation.id}/resend`, jsonPost({}, owner.cookie))
+    expect(resent.status).toBe(200)
+    const second = await resent.json() as InviteBody
+    expect(second.invitation).toMatchObject({ id: first.invitation.id, status: 'pending' })
+    expect(second.inviteUrl).not.toBe(first.inviteUrl)
+    expect((await h.app.request(`http://app.example.test/api/invitations/${inviteToken(first.inviteUrl)}`)).status).toBe(404)
+    expect((await h.app.request(`http://app.example.test/api/invitations/${inviteToken(second.inviteUrl)}`)).status).toBe(200)
+    expect((await h.app.request('http://app.example.test/api/invitations/invitation_missing/resend', jsonPost({}, owner.cookie))).status).toBe(404)
+    const events = await h.database.db.select({ event: auditLog.event }).from(auditLog)
+    expect(events.map((row) => row.event)).toContain('member.invite_resent')
+  } finally { h.close() }
+})
+
+it('refuses to ban or revoke the sessions of your own account', async () => {
+  const h = await harness()
+  try {
+    await signedIn(h, { email: 'owner@example.test', role: 'owner' })
+    const admin = await signedIn(h, { email: 'admin@example.test', role: 'admin' })
+    for (const action of ['ban', 'revoke-sessions']) {
+      const response = await h.app.request(`/api/members/${admin.user.id}/${action}`, jsonPost({}, admin.cookie))
+      expect(response.status, action).toBe(400)
+      expect(await response.json()).toMatchObject({ error: 'You cannot do this to your own account.' })
+    }
+    expect((await h.database.db.select({ banned: users.banned }).from(users).where(eq(users.id, admin.user.id)).limit(1))[0]?.banned).toBeFalsy()
   } finally { h.close() }
 })
 

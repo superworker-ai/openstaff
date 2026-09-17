@@ -12,7 +12,7 @@ export async function browserSmoke(dataDir: string) {
   const pageUrl = `http://127.0.0.1:${(pageServer.address() as { port: number }).port}`
   const call = (name: string, input: unknown) => mockStream([{ type: 'stream-start', warnings: [] }, { type: 'tool-call', toolCallId: name, toolName: name, input: JSON.stringify(input) }, { type: 'finish', finishReason: { unified: 'tool-calls', raw: undefined }, usage: mockUsage }])
   const model = new MockLanguageModelV3({ doStream: [call('browser_navigate', { url: pageUrl }), call('browser_screenshot', {}), textStream('I captured the local page.')] })
-  const server = await startServer({ config: { dataDir, port: 0 }, modelResolver: () => model })
+  const server = await startServer({ config: { dataDir, port: 0, authSignup: 'open' }, modelResolver: () => model })
   let cookie = ''
   async function request(url: string, method = 'GET', body?: unknown) {
     const response = await fetch(`${server.url}${url}`, { method, headers: { cookie, 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) })

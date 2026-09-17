@@ -32,6 +32,7 @@ export interface AuthConfig {
   socialProviders: string[]
   sso: boolean
   emailVerification: boolean
+  bootstrap: boolean
 }
 
 export const loadMe = createServerFn({ method: 'GET' }).handler(() => serverApi<{ user: User }>('/api/auth/get-session'))

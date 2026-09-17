@@ -24,7 +24,7 @@ afterEach(async () => {
 async function application(config: Partial<Config> = {}) {
   const directory = await fs.mkdtemp(path.resolve('data-test-hosted-'))
   directories.push(directory)
-  const value = await createApplication({ config: { dataDir: directory, maxConcurrentTurns: 0, ...config }, automationClock: clock })
+  const value = await createApplication({ config: { dataDir: directory, maxConcurrentTurns: 0, authSignup: 'open', ...config }, automationClock: clock })
   applications.push(value)
   return value
 }

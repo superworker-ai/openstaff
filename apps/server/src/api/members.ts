@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { and, eq, gt, isNull } from 'drizzle-orm'
-import { Hono } from 'hono'
+import { Hono, type Context } from 'hono'
 import { z } from 'zod'
 import { createId } from '@openstaff/shared'
 import { requestIp } from '../audit.js'
@@ -9,7 +9,7 @@ import { automations, bots, computerCredentials, invitations, roomMembers, rooms
 import { invitationTemplate } from '../email/templates.js'
 import { checkMemberPlan } from '../plan.js'
 import type { ApiDependencies } from './context.js'
-import { isResponse, parseBody } from './helpers.js'
+import { isResponse, parseBody, publicOrigin } from './helpers.js'
 
 const invitationInput = z.object({ email: z.email().transform((value) => value.trim().toLowerCase()), role: z.enum(['admin', 'member']).default('member') })
 const roleInput = z.object({ role: z.enum(['admin', 'member']) })
@@ -40,7 +40,7 @@ export function memberRoutes({ db, audit }: Pick<ApiDependencies, 'db' | 'audit'
     if (isResponse(input)) return input
     const target = (await db.select().from(users).where(eq(users.id, context.req.param('id'))).limit(1))[0]
     if (!target) return context.json({ error: 'Member not found' }, 404)
-    if (target.role === 'owner') return context.json({ error: 'Ownership transfer is not available yet' }, 409)
+    if (target.role === 'owner') return context.json({ error: 'Use transfer ownership to change the owner.' }, 409)
     await db.update(users).set({ role: input.role, updatedAt: new Date() }).where(eq(users.id, target.id))
     await audit({ actorUserId: context.get('user').id, actorIp: requestIp(context.req.raw.headers), event: 'member.role_changed', targetType: 'user', targetId: target.id, metadata: { from: target.role, to: input.role } })
     const updated = (await db.select().from(users).where(eq(users.id, target.id)).limit(1))[0]!
@@ -51,6 +51,7 @@ export function memberRoutes({ db, audit }: Pick<ApiDependencies, 'db' | 'audit'
     if (isResponse(input)) return input
     const target = (await db.select().from(users).where(eq(users.id, context.req.param('id'))).limit(1))[0]
     if (!target) return context.json({ error: 'Member not found' }, 404)
+    if (target.id === context.get('user').id) return context.json({ error: 'You cannot do this to your own account.' }, 400)
     if (target.role === 'owner') return context.json({ error: 'The workspace owner cannot be banned' }, 409)
     const banExpires = input.expiresAt ? new Date(input.expiresAt) : input.expiresIn ? new Date(Date.now() + input.expiresIn * 1000) : null
     await db.transaction(async (tx) => {
@@ -71,6 +72,7 @@ export function memberRoutes({ db, audit }: Pick<ApiDependencies, 'db' | 'audit'
   app.post('/:id/revoke-sessions', async (context) => {
     const target = (await db.select().from(users).where(eq(users.id, context.req.param('id'))).limit(1))[0]
     if (!target) return context.json({ error: 'Member not found' }, 404)
+    if (target.id === context.get('user').id) return context.json({ error: 'You cannot do this to your own account.' }, 400)
     if (target.role === 'owner') return context.json({ error: 'The workspace owner sessions cannot be revoked through this endpoint' }, 409)
     await db.delete(sessions).where(eq(sessions.userId, target.id))
     await audit({ actorUserId: context.get('user').id, actorIp: requestIp(context.req.raw.headers), event: 'session.revoked', targetType: 'user', targetId: target.id, metadata: { scope: 'all' } })
@@ -114,12 +116,20 @@ export function memberRoutes({ db, audit }: Pick<ApiDependencies, 'db' | 'audit'
 
 export function invitationRoutes({ db, config, sendEmail, audit }: Pick<ApiDependencies, 'db' | 'config' | 'sendEmail' | 'audit'>): Hono<{ Variables: AppVariables }> {
   const app = new Hono<{ Variables: AppVariables }>()
+  // The admin needs the link itself whenever email is not configured, so every send returns it and nothing is stored.
+  const deliver = async (context: Context, email: string, role: 'admin' | 'member', token: string) => {
+    const workspaceName = (await db.select({ name: workspace.name }).from(workspace).where(eq(workspace.id, 'workspace')).limit(1))[0]?.name ?? 'OpenStaff'
+    const inviteUrl = new URL(`/invite/${token}`, publicOrigin(context, config)).toString()
+    await sendEmail({ to: email, ...invitationTemplate(workspaceName, role, inviteUrl) })
+    return { inviteUrl, delivery: config.email.provider === 'console' ? 'link' as const : 'email' as const }
+  }
   app.get('/', async (context) => {
     if (!canManage(context.get('user').role)) return context.json({ error: 'Workspace administrator required' }, 403)
-    const pending = await db.select({ id: invitations.id, email: invitations.email, role: invitations.role, invitedBy: invitations.invitedBy, expiresAt: invitations.expiresAt, createdAt: invitations.createdAt }).from(invitations).where(and(
-      isNull(invitations.acceptedAt), isNull(invitations.revokedAt), gt(invitations.expiresAt, new Date().toISOString()),
+    const now = new Date().toISOString()
+    const open = await db.select({ id: invitations.id, email: invitations.email, role: invitations.role, invitedBy: invitations.invitedBy, expiresAt: invitations.expiresAt, createdAt: invitations.createdAt }).from(invitations).where(and(
+      isNull(invitations.acceptedAt), isNull(invitations.revokedAt),
     )).orderBy(invitations.createdAt)
-    return context.json({ invitations: pending })
+    return context.json({ invitations: open.map((row) => ({ ...row, status: row.expiresAt > now ? 'pending' as const : 'expired' as const })) })
   })
   app.post('/', async (context) => {
     if (!canManage(context.get('user').role)) return context.json({ error: 'Workspace administrator required' }, 403)
@@ -133,11 +143,20 @@ export function invitationRoutes({ db, config, sendEmail, audit }: Pick<ApiDepen
     const token = randomBytes(32).toString('base64url'), now = new Date(), id = createId('invitation')
     const invitation = { id, email: input.email, role: input.role, tokenHash: tokenHash(token), invitedBy: context.get('user').id, expiresAt: new Date(now.getTime() + invitationLifetime).toISOString(), createdAt: now.toISOString() }
     await db.insert(invitations).values(invitation)
-    const workspaceName = (await db.select({ name: workspace.name }).from(workspace).where(eq(workspace.id, 'workspace')).limit(1))[0]?.name ?? 'OpenStaff'
-    const base = config.publicAppUrl ?? 'http://localhost:3000'
-    await sendEmail({ to: input.email, ...invitationTemplate(workspaceName, input.role, `${base}/invite/${token}`) })
+    const sent = await deliver(context, input.email, input.role, token)
     await audit({ actorUserId: context.get('user').id, actorIp: requestIp(context.req.raw.headers), event: 'member.invited', targetType: 'invitation', targetId: id, metadata: { email: input.email, role: input.role } })
-    return context.json({ invitation: { id, email: invitation.email, role: invitation.role, invitedBy: invitation.invitedBy, expiresAt: invitation.expiresAt, createdAt: invitation.createdAt } }, 201)
+    return context.json({ invitation: { id, email: invitation.email, role: invitation.role, invitedBy: invitation.invitedBy, expiresAt: invitation.expiresAt, createdAt: invitation.createdAt, status: 'pending' as const }, ...sent }, 201)
+  })
+  // Rotating the hash keeps the old link dead; an expired row is revived rather than recreated.
+  app.post('/:id/resend', async (context) => {
+    if (!canManage(context.get('user').role)) return context.json({ error: 'Workspace administrator required' }, 403)
+    const current = (await db.select().from(invitations).where(and(eq(invitations.id, context.req.param('id')), isNull(invitations.acceptedAt))).limit(1))[0]
+    if (!current) return context.json({ error: 'Invitation not found' }, 404)
+    const token = randomBytes(32).toString('base64url'), expiresAt = new Date(Date.now() + invitationLifetime).toISOString()
+    await db.update(invitations).set({ tokenHash: tokenHash(token), expiresAt, revokedAt: null }).where(eq(invitations.id, current.id))
+    const sent = await deliver(context, current.email, current.role, token)
+    await audit({ actorUserId: context.get('user').id, actorIp: requestIp(context.req.raw.headers), event: 'member.invite_resent', targetType: 'invitation', targetId: current.id, metadata: { email: current.email, role: current.role } })
+    return context.json({ invitation: { id: current.id, email: current.email, role: current.role, invitedBy: current.invitedBy, expiresAt, createdAt: current.createdAt, status: 'pending' as const }, ...sent })
   })
   app.delete('/:id', async (context) => {
     if (!canManage(context.get('user').role)) return context.json({ error: 'Workspace administrator required' }, 403)

@@ -26,11 +26,11 @@ describe('hosted configuration', () => {
 })
 
 describe('authentication configuration', () => {
-  it('keeps the zero-configuration developer defaults', () => {
+  it('closes sign-up to invitations by default and keeps the console mailer', () => {
     vi.stubEnv('SIGNUP_CODE', '')
     vi.stubEnv('AUTH_SIGNUP', '')
     vi.stubEnv('EMAIL_PROVIDER', '')
-    expect(readConfig()).toMatchObject({ authSignup: 'open', email: { provider: 'console' } })
+    expect(readConfig()).toMatchObject({ authSignup: 'invite', email: { provider: 'console' } })
   })
 
   it('defaults to code sign-up when the legacy code is configured', () => {

@@ -83,7 +83,8 @@ export async function signUp(h: BrowserHarness, options: { name?: string; email?
   const password = options.password ?? BROWSER_PASSWORD
   await h.page.goto(`${h.url}/login`, { waitUntil: 'domcontentloaded' })
   await h.page.locator('body[data-hydrated="true"]').waitFor()
-  await h.page.getByRole('link', { name: 'Create account', exact: true }).click()
+  // An empty workspace advertises the bootstrap copy; a seeded one the plain link.
+  await h.page.getByRole('link', { name: /^Create (account|the first account for this workspace)$/ }).click()
   await h.page.getByRole('heading', { name: 'Create your account', exact: true }).waitFor()
   await h.page.getByPlaceholder('Your name').fill(name)
   await h.page.getByPlaceholder('Email', { exact: true }).fill(email)

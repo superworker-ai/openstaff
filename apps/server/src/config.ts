@@ -36,7 +36,7 @@ export function readConfig(overrides: Partial<Config> = {}): Config {
   const plan = overrides.plan ?? (process.env.WORKSPACE_PLAN || 'self-hosted')
   const state = overrides.state ?? (process.env.WORKSPACE_STATE || 'active')
   const signupCode = overrides.signupCode ?? (process.env.SIGNUP_CODE || undefined)
-  const authSignup = overrides.authSignup ?? (process.env.AUTH_SIGNUP || (signupCode ? 'code' : 'open'))
+  const authSignup = overrides.authSignup ?? (process.env.AUTH_SIGNUP || (signupCode ? 'code' : 'invite'))
   const emailProvider = overrides.email?.provider ?? (process.env.EMAIL_PROVIDER || 'console')
   if (!(WORKSPACE_PLANS as readonly string[]).includes(plan)) throw new Error(`WORKSPACE_PLAN must be one of ${WORKSPACE_PLANS.join(', ')}`)
   if (!(WORKSPACE_STATES as readonly string[]).includes(state)) throw new Error(`WORKSPACE_STATE must be one of ${WORKSPACE_STATES.join(', ')}`)

@@ -6,7 +6,7 @@ import { plugins, providerKeys, workspace } from '../db/schema.js'
 
 it('protects secrets, installs plugins, and authorizes automation mutations through HTTP', async () => {
   const directory = await fs.mkdtemp(path.resolve('data-test-api-'))
-  const running = await createApplication({ config: { dataDir: directory }, automationClock: { now: () => new Date(), schedule: () => ({ stop() {} }) } })
+  const running = await createApplication({ config: { dataDir: directory, authSignup: 'open' }, automationClock: { now: () => new Date(), schedule: () => ({ stop() {} }) } })
   let cookie = ''
   const request = async (url: string, method = 'GET', body?: unknown) => {
     const response = await running.app.request(url, { method, headers: { cookie, 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) })
@@ -53,7 +53,7 @@ it('protects secrets, installs plugins, and authorizes automation mutations thro
 describe('/api/workspace/experimental', () => {
   it('stores the Jev experiment in settings, hides the key, and hot reloads the runtime', async () => {
     const directory = await fs.mkdtemp(path.resolve('data-test-experimental-'))
-    const running = await createApplication({ config: { dataDir: directory }, automationClock: { now: () => new Date(), schedule: () => ({ stop() {} }) } })
+    const running = await createApplication({ config: { dataDir: directory, authSignup: 'open' }, automationClock: { now: () => new Date(), schedule: () => ({ stop() {} }) } })
     let cookie = ''
     const request = async (url: string, method = 'GET', body?: unknown) => {
       const response = await running.app.request(url, { method, headers: { cookie, 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) })

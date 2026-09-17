@@ -132,7 +132,8 @@ export async function createApplication(options: CreateApplicationOptions = {}):
     try { await database.db.run(sql`SELECT 1`); return context.json({ ok: true }) } catch { return context.json({ ok: false }, 503) }
   })
   app.get('/api/plan', (context) => context.json({ plan: config.plan, state: config.state, managedKeys: config.managedKeys, billingUrl: config.billingUrl ?? null, limits: PLAN_LIMITS[config.plan] }))
-  app.get('/api/auth-config', async (context) => context.json({ password: true, magicLink: true, signup: config.authSignup, socialProviders: Object.keys(config.social), sso: Boolean((await database.db.select({ id: ssoProvider.id }).from(ssoProvider).limit(1))[0]), emailVerification: config.email.provider !== 'console' }))
+  // bootstrap: an empty users table still has to be able to create its first owner, whatever the sign-up policy says.
+  app.get('/api/auth-config', async (context) => context.json({ password: true, magicLink: true, signup: config.authSignup, socialProviders: Object.keys(config.social), sso: Boolean((await database.db.select({ id: ssoProvider.id }).from(ssoProvider).limit(1))[0]), emailVerification: config.email.provider !== 'console', bootstrap: !(await database.db.select({ id: users.id }).from(users).limit(1))[0] }))
   const guardSsoMutation = ssoMutationGuard(auth, config)
   for (const path of ['/api/auth/sso/register', '/api/auth/sso/update-provider', '/api/auth/sso/delete-provider', '/api/auth/sso/request-domain-verification', '/api/auth/sso/verify-domain']) app.use(path, guardSsoMutation)
   app.on(['GET', 'POST'], '/api/auth/*', authHandler(auth))

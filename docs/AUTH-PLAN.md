@@ -26,8 +26,11 @@ session management, rate limiting, and an audit log. Self-hosters keep a zero-co
   `role !== 'owner'` check that guards member or SSO management widens to include admin;
   the ones listed above stay owner-only.
 - **D5. Sign-up policy.** `AUTH_SIGNUP` = `open` | `code` | `invite`. Default is `code` when
-  `SIGNUP_CODE` is set, otherwise `open`. Hosted tenants run `invite`. The first user ever is
-  always allowed (bootstrap) and becomes owner; that request still honours `SIGNUP_CODE`.
+  `SIGNUP_CODE` is set, otherwise `invite`. Hosted tenants run `invite`. The first user ever is
+  always allowed (bootstrap) and becomes owner; that request still honours `SIGNUP_CODE`, and
+  `/api/auth-config` reports `bootstrap: true` so the login and sign-up pages can offer it.
+  A live pending invitation admits its email in every mode, bypassing `SIGNUP_CODE`, and hands
+  the new user its role wherever the account is created (password, magic link, social, SSO).
   A registered SSO domain implies sign-up for matching emails via just-in-time provisioning.
 - **D6. Email.** `EMAIL_PROVIDER` = `console` | `smtp` | `resend`. `console` prints the link
   and is the default, so development and tests need nothing. `smtp` uses nodemailer with

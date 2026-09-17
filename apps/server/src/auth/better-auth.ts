@@ -11,7 +11,7 @@ import { adminAc, userAc } from 'better-auth/plugins/admin/access'
 import { magicLink } from 'better-auth/plugins/magic-link'
 import { twoFactor } from 'better-auth/plugins/two-factor'
 import { sso } from '@better-auth/sso'
-import { and, count, eq, gt, isNull } from 'drizzle-orm'
+import { and, count, eq, gt, isNull, sql } from 'drizzle-orm'
 import { createId, PLAN_LIMITS, type IdKind } from '@openstaff/shared'
 import type { AuditWriter } from '../audit.js'
 import { requestIp } from '../audit.js'
@@ -73,6 +73,10 @@ export function createAuth(config: Config, db: Database, dependencies: { sendEma
   const configuredSocialProviders = Object.keys(config.social) as Array<keyof Config['social']>
 
   const hasSsoDomain = async (email: string) => (await db.select({ domain: ssoProvider.domain }).from(ssoProvider)).some((row) => domainMatches(email, row.domain))
+  // A live invitation is the workspace's own admission decision, so it admits the email in every sign-up mode.
+  const pendingInvitation = async (email: string) => (await db.select({ id: invitations.id, role: invitations.role }).from(invitations).where(and(
+    sql`lower(${invitations.email}) = ${email}`, isNull(invitations.acceptedAt), isNull(invitations.revokedAt), gt(invitations.expiresAt, new Date().toISOString()),
+  )).limit(1))[0]
   // viaSso: only identity-provider provisioning may rely on a registered SSO domain (D5); password and magic-link sign-ups never do.
   const enforceSignup = async (value: unknown, headers: Headers | undefined, options: { afterCreate?: boolean; skipCode?: boolean; viaSso?: boolean } = {}) => {
     const email = textField(value, 'email')?.trim().toLowerCase()
@@ -80,17 +84,12 @@ export function createAuth(config: Config, db: Database, dependencies: { sendEma
     const rawTotal = (await db.select({ value: count() }).from(users))[0]?.value ?? 0
     const total = Math.max(0, rawTotal - (options.afterCreate ? 1 : 0))
     const suppliedCode = headers?.get('x-signup-code') ?? textField(value, 'signupCode')
-    const admittedBySsoDomain = Boolean(options.viaSso) && total > 0 && await hasSsoDomain(email)
-    if (!admittedBySsoDomain && !options.skipCode && config.signupCode && (total === 0 || config.authSignup === 'code') && suppliedCode !== config.signupCode) {
+    const admitted = Boolean(await pendingInvitation(email)) || (Boolean(options.viaSso) && total > 0 && await hasSsoDomain(email))
+    if (!admitted && !options.skipCode && config.signupCode && (total === 0 || config.authSignup === 'code') && suppliedCode !== config.signupCode) {
       throw new APIError('FORBIDDEN', { code: 'invalid_signup_code', message: 'Invalid signup code' })
     }
-    if (!admittedBySsoDomain && total > 0 && config.authSignup === 'code' && !config.signupCode) throw new APIError('FORBIDDEN', { code: 'signup_closed', message: 'Sign-up is closed' })
-    if (!admittedBySsoDomain && total > 0 && config.authSignup === 'invite') {
-      const pending = (await db.select({ id: invitations.id }).from(invitations).where(and(
-        eq(invitations.email, email), isNull(invitations.acceptedAt), isNull(invitations.revokedAt), gt(invitations.expiresAt, new Date().toISOString()),
-      )).limit(1))[0]
-      if (!pending) throw new APIError('FORBIDDEN', { code: 'invitation_required', message: 'A pending invitation is required' })
-    }
+    if (!admitted && total > 0 && config.authSignup === 'code' && !config.signupCode) throw new APIError('FORBIDDEN', { code: 'signup_closed', message: 'Sign-up is closed' })
+    if (!admitted && total > 0 && config.authSignup === 'invite') throw new APIError('FORBIDDEN', { code: 'invitation_required', message: 'A pending invitation is required' })
     if (!options.afterCreate) {
       const limit = await checkMemberPlan(db, config)
       if (limit) throw new APIError('PAYMENT_REQUIRED', { ...limit.body(), message: limit.message })
@@ -167,11 +166,21 @@ export function createAuth(config: Config, db: Database, dependencies: { sendEma
     socialProviders: config.social,
     account: { accountLinking: { enabled: true, trustedProviders: configuredSocialProviders } },
     databaseHooks: {
-      user: { create: { before: async (user, context) => {
-        await enforceSignup(user, context?.headers, { skipCode: context?.path === '/sign-up/email', viaSso: Boolean(context?.path?.startsWith('/sso/')) })
-        const total = (await db.select({ value: count() }).from(users))[0]?.value ?? 0
-        return { data: { ...user, role: total === 0 ? 'owner' : 'member' } }
-      } } },
+      // Every sign-up path lands here, so the invitation is what grants the role and gets consumed.
+      user: { create: {
+        before: async (user, context) => {
+          await enforceSignup(user, context?.headers, { skipCode: context?.path === '/sign-up/email', viaSso: Boolean(context?.path?.startsWith('/sso/')) })
+          const total = (await db.select({ value: count() }).from(users))[0]?.value ?? 0
+          const invitation = await pendingInvitation(textField(user, 'email')?.trim().toLowerCase() ?? '')
+          return { data: { ...user, role: total === 0 ? 'owner' : invitation?.role ?? 'member' } }
+        },
+        after: async (user, context) => {
+          const invitation = await pendingInvitation(user.email.trim().toLowerCase())
+          if (!invitation) return
+          await db.update(invitations).set({ acceptedAt: new Date().toISOString() }).where(and(eq(invitations.id, invitation.id), isNull(invitations.acceptedAt)))
+          await audit({ actorUserId: user.id, actorIp: requestIp(context?.headers), event: 'member.invite_accepted', targetType: 'invitation', targetId: invitation.id, metadata: { role: invitation.role } })
+        },
+      } },
     },
     hooks: {
       before: createAuthMiddleware(async (context) => {
