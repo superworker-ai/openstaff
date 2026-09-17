@@ -49,8 +49,8 @@ import Button from './Button.astro'
     <div data-reveal>
       <p class="body">{horizon.body}</p>
       <div class="horizon-actions">
-        <Button href={horizon.actions.primary.href} size="lg">{horizon.actions.primary.label}</Button>
-        <Button href={horizon.actions.secondary.href} variant="secondary" tone="inverse" size="lg" external>{horizon.actions.secondary.label}</Button>
+        <Button href={horizon.actions.primary.href} size="lg" external={horizon.actions.primary.external}>{horizon.actions.primary.label}</Button>
+        <Button href={horizon.actions.secondary.href} variant="secondary" tone="inverse" size="lg" external={horizon.actions.secondary.external}>{horizon.actions.secondary.label}</Button>
       </div>
     </div>
   </div>

@@ -19,7 +19,7 @@ import Container from './Container.astro'
   <div class="closing-copy"><Container>
     <h2 id="final-title">{finalCta.title}<a class="anchor" href="#final-title" aria-label="Link to this section">#</a></h2>
     <div class="actions">
-      <Button href={actions.primary.href} size="lg">{actions.primary.label}</Button>
+      <Button href={actions.primary.href} size="lg" external={actions.primary.external}>{actions.primary.label}</Button>
       <Button href={actions.secondary.href} variant="secondary" tone="inverse" size="lg">{actions.secondary.label}</Button>
     </div>
   </Container></div>

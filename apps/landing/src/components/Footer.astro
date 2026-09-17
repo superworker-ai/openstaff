@@ -1,5 +1,5 @@
 ---
-import { APP_URL, GITHUB_URL } from '../config'
+import { GITHUB_URL } from '../config'
 import Container from './Container.astro'
 import BrandMark from './BrandMark.astro'
 
@@ -12,8 +12,8 @@ const groups: FooterGroup[] = [
   {
     title: 'Product',
     links: [
-      { label: 'Get started', href: APP_URL },
-      { label: 'Log in', href: APP_URL },
+      { label: 'Self-host', href: '#self-host' },
+      { label: 'Star on GitHub', href: GITHUB_URL, external: true },
     ],
   },
   {

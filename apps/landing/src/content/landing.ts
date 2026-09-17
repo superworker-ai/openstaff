@@ -1,4 +1,4 @@
-import { APP_URL, GITHUB_URL } from '../config'
+import { GITHUB_URL } from '../config'
 import type { ComponentProps } from 'astro/types'
 import type BotFace from '../components/BotFace.astro'
 
@@ -52,6 +52,7 @@ export const bots = [
 export interface Link {
   label: string
   href: string
+  external?: boolean
 }
 export interface SectionCopy {
   eyebrow: string
@@ -74,8 +75,8 @@ export const hero = {
   body: 'Named bots with their own computer, working in the rooms your team already lives in. Watch them work, take over when it matters, approve what counts.',
 } as const
 export const actions = {
-  primary: { label: 'Get started', href: APP_URL },
-  secondary: { label: 'Self-host in 5 minutes', href: '#self-host' },
+  primary: { label: 'View on GitHub', href: GITHUB_URL, external: true },
+  secondary: { label: 'Self-host in 5 minutes', href: '#self-host', external: false },
 } as const satisfies Record<string, Link>
 export const worksWith = {
   title: 'Works with the tools you already use',
@@ -179,12 +180,12 @@ export const faq = {
     {
       question: 'Is it really open source?',
       answer:
-        'Yes. OpenStaff is MIT licensed, and you can self-host the full product anywhere. The hosted version is there for convenience.',
+        'Yes. OpenStaff is MIT licensed, and you can self-host the full product anywhere. A hosted version is coming later.',
     },
     {
       question: 'Do I need my own API keys?',
       answer:
-        'When self-hosting, yes: use one of XAI_API_KEY, ANTHROPIC_API_KEY, OPENAI_API_KEY, OPENCODE_API_KEY, or AI_GATEWAY_API_KEY. The hosted app can manage keys for you.',
+        'When self-hosting, yes: use one of XAI_API_KEY, ANTHROPIC_API_KEY, OPENAI_API_KEY, OPENCODE_API_KEY, or AI_GATEWAY_API_KEY. The hosted version, when it launches, will manage keys for you.',
     },
     {
       question: 'Is the bot’s computer safe?',
@@ -205,6 +206,6 @@ export const horizon = {
   body: 'Open source and self-hostable, so the staff you build, the memory it keeps, and the work it ships stay yours.',
   actions: {
     primary: actions.primary,
-    secondary: { label: 'Star on GitHub', href: GITHUB_URL },
+    secondary: actions.secondary,
   },
 } as const
