@@ -1,6 +1,6 @@
 # Render Blueprint. Deploys the same three processes as docker-compose.yml: a public Caddy
 # gateway, a private server with a persistent disk, and a private web app.
-# https://render.com/deploy?repo=https://github.com/juancgarza/open-superworkers
+# https://render.com/deploy?repo=https://github.com/superworker-ai/openstaff
 services:
   - type: web
     name: openstaff-gateway

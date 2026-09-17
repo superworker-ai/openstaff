@@ -40,7 +40,7 @@ engineering.
    Install Docker Engine with Compose v2. Point the wildcard DNS at it.
 3. Per customer, after payment: create `/srv/tenants/<slug>/.env` from `.env.example` with
    `PUBLIC_HOST=<slug>.openstaff.app`, an HTTPS `PUBLIC_APP_URL`, a fresh 32-byte
-   `SECRETS_KEY`, `SIGNUP_CODE`, `GHCR_OWNER=juancgarza`, our `AI_GATEWAY_API_KEY`,
+   `SECRETS_KEY`, `SIGNUP_CODE`, `GHCR_OWNER=superworker-ai`, our `AI_GATEWAY_API_KEY`,
    `COMPUTER_DRIVER=e2b`, and `E2B_API_KEY`. Start with:
    `docker compose -p <slug> --env-file /srv/tenants/<slug>/.env -f docker-compose.yml -f compose.prod.yml -f compose.litestream.yml up -d`.
    Each project needs distinct host ports or a shared front Caddy; the shared Caddy is what

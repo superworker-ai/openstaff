@@ -63,7 +63,7 @@ Notes:
 
 ## Render
 
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/juancgarza/open-superworkers)
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/superworker-ai/openstaff)
 
 `render.yaml` defines a public gateway web service, a private server with a 10 GB disk, and a
 private web service. Render prompts for the `sync: false` variables (`PUBLIC_APP_URL`,
@@ -74,7 +74,7 @@ disks are root-owned.
 
 ## Cloudflare
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/juancgarza/open-superworkers/tree/main/deploy/cloudflare)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/superworker-ai/openstaff/tree/main/deploy/cloudflare)
 
 Cloudflare Containers run one instance of the `allinone` image behind a Worker
 (`deploy/cloudflare`). Container disk is ephemeral, so durable state must live in R2:

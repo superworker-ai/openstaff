@@ -37,7 +37,7 @@ FROM playwright AS server
 WORKDIR /app
 LABEL org.opencontainers.image.title="OpenStaff server" \
   org.opencontainers.image.description="OpenStaff Hono server" \
-  org.opencontainers.image.source="https://github.com/superworker-ai/open-superworkers"
+  org.opencontainers.image.source="https://github.com/superworker-ai/openstaff"
 ENV NODE_ENV=production PLAYWRIGHT_BROWSERS_PATH=/ms-playwright DATA_DIR=/data
 COPY --from=server-deps --chown=node:node /server ./
 # Browser system packages were installed as root in the cached stage; the
@@ -56,7 +56,7 @@ FROM node:22-bookworm AS web
 WORKDIR /app
 LABEL org.opencontainers.image.title="OpenStaff web" \
   org.opencontainers.image.description="OpenStaff TanStack Start web application" \
-  org.opencontainers.image.source="https://github.com/superworker-ai/open-superworkers"
+  org.opencontainers.image.source="https://github.com/superworker-ai/openstaff"
 ENV NODE_ENV=production PORT=3001
 COPY --from=web-deps --chown=node:node /web ./
 USER node

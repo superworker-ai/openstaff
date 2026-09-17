@@ -155,18 +155,18 @@ export const selfHost = {
   },
   commands: [
     `git clone ${GITHUB_URL}`,
-    'cd open-superworkers && pnpm i && cp .env.example .env',
+    'cd openstaff && pnpm i && cp .env.example .env',
     'pnpm dev',
   ],
   deploys: [
     { label: 'Deploy on Railway', href: 'https://railway.com/new' },
     {
       label: 'Deploy to Render',
-      href: 'https://render.com/deploy?repo=https://github.com/juancgarza/open-superworkers',
+      href: 'https://render.com/deploy?repo=https://github.com/superworker-ai/openstaff',
     },
     {
       label: 'Deploy to Cloudflare',
-      href: 'https://deploy.workers.cloudflare.com/?url=https://github.com/juancgarza/open-superworkers/tree/main/deploy/cloudflare',
+      href: 'https://deploy.workers.cloudflare.com/?url=https://github.com/superworker-ai/openstaff/tree/main/deploy/cloudflare',
     },
   ],
 } as const satisfies SectionCopy & {

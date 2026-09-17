@@ -103,8 +103,8 @@ explicit Docker overlay only when selecting Docker as the Computer provider. See
 ### Deploy to a cloud host
 
 [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/new)
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/juancgarza/open-superworkers)
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/juancgarza/open-superworkers/tree/main/deploy/cloudflare)
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/superworker-ai/openstaff)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/superworker-ai/openstaff/tree/main/deploy/cloudflare)
 
 Railway runs the gateway, server, and web as three services with a volume. Render uses the
 `render.yaml` blueprint with a disk. Cloudflare runs the all-in-one image in a Container with
