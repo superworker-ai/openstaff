@@ -50,4 +50,14 @@ describe('authentication configuration', () => {
     vi.stubEnv('AUTH_TRUSTED_ORIGINS', 'https://admin.example, https://staff.example')
     expect(readConfig().trustedOrigins).toEqual(['https://staff.example', 'https://admin.example'])
   })
+
+  it('trusts the local web and server ports when no public URL is set outside production', () => {
+    vi.stubEnv('PUBLIC_APP_URL', '')
+    vi.stubEnv('AUTH_TRUSTED_ORIGINS', '')
+    vi.stubEnv('NODE_ENV', 'development')
+    vi.stubEnv('SERVER_PORT', '9911')
+    expect(readConfig().trustedOrigins).toEqual(['http://localhost:3000', 'http://127.0.0.1:3000', 'http://localhost:9911', 'http://127.0.0.1:9911'])
+    vi.stubEnv('NODE_ENV', 'production')
+    expect(readConfig().trustedOrigins).toEqual([])
+  })
 })

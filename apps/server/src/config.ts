@@ -46,14 +46,17 @@ export function readConfig(overrides: Partial<Config> = {}): Config {
   if (emailProvider !== 'console' && !emailFrom) throw new Error('EMAIL_FROM is required when EMAIL_PROVIDER is not console')
   if (plan !== 'self-hosted' && process.env.COMPUTER_DRIVER === 'local') throw new Error('COMPUTER_DRIVER=local is not allowed on hosted plans')
   const publicAppUrl = overrides.publicAppUrl ?? process.env.PUBLIC_APP_URL
-  const trustedOrigins = overrides.trustedOrigins ?? [...new Set([publicAppUrl, ...(process.env.AUTH_TRUSTED_ORIGINS ?? '').split(',').map((value) => value.trim())].filter((value): value is string => Boolean(value)))]
+  const port = overrides.port ?? Number(process.env.SERVER_PORT ?? 8787)
+  // Better Auth rejects any origin it was not told about; outside production a bare `pnpm dev` has no PUBLIC_APP_URL, so trust the local web and server ports.
+  const devOrigins = !publicAppUrl && process.env.NODE_ENV !== 'production' ? ['http://localhost:3000', 'http://127.0.0.1:3000', `http://localhost:${port}`, `http://127.0.0.1:${port}`] : []
+  const trustedOrigins = overrides.trustedOrigins ?? [...new Set([publicAppUrl, ...(process.env.AUTH_TRUSTED_ORIGINS ?? '').split(',').map((value) => value.trim()), ...devOrigins].filter((value): value is string => Boolean(value)))]
   const pair = (clientId: string | undefined, clientSecret: string | undefined) => clientId && clientSecret ? { clientId, clientSecret } : undefined
   const google = overrides.social?.google ?? pair(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET)
   const github = overrides.social?.github ?? pair(process.env.GITHUB_CLIENT_ID, process.env.GITHUB_CLIENT_SECRET)
   const microsoft = overrides.social?.microsoft ?? (process.env.MICROSOFT_CLIENT_ID && process.env.MICROSOFT_CLIENT_SECRET ? { clientId: process.env.MICROSOFT_CLIENT_ID, clientSecret: process.env.MICROSOFT_CLIENT_SECRET, tenantId: process.env.MICROSOFT_TENANT_ID || 'common' } : undefined)
   return {
     dataDir: path.isAbsolute(configuredDataDir) ? configuredDataDir : path.resolve(import.meta.dirname, '../../..', configuredDataDir),
-    port: overrides.port ?? Number(process.env.SERVER_PORT ?? 8787),
+    port,
     maxConcurrentTurns: overrides.maxConcurrentTurns ?? Number(process.env.MAX_CONCURRENT_TURNS ?? DEFAULT_MAX_CONCURRENT_TURNS),
     contextMessages: overrides.contextMessages ?? Number(process.env.CONTEXT_MESSAGES ?? DEFAULT_CONTEXT_MESSAGES),
     defaultModel: overrides.defaultModel ?? process.env.DEFAULT_MODEL ?? DEFAULT_MODEL,
