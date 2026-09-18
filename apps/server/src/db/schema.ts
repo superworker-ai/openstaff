@@ -177,6 +177,7 @@ export const turns = sqliteTable('turns', {
   roomId: text('room_id').notNull().references(() => rooms.id, { onDelete: 'cascade' }),
   botId: text('bot_id').notNull().references(() => bots.id, { onDelete: 'cascade' }),
   triggerMessageId: text('trigger_message_id').notNull().references(() => messages.id),
+  actorUserId: text('actor_user_id'),
   replyMode: text('reply_mode', { enum: ['direct', 'optional'] }).notNull(),
   status: text('status', { enum: ['queued', 'running', 'waiting_approval', 'done', 'skipped', 'failed', 'cancelled'] }).notNull(),
   model: text('model').notNull(),

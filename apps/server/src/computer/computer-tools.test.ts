@@ -58,7 +58,7 @@ it('throttles automatic screenshots to one per 700 ms while explicit screenshots
     const screen = new ScreenRecorder(f.directory, turnId, recorder)
     const session = new ComputerUseSession(fake.computer, screen, new DisplayGate(), recorder, undefined, { sleep: async () => undefined, now: () => now })
     const tools = computerTools(session, screen)
-    const context = { toolCallId: 'call', messages: [], context: { turnId, roomId: f.roomId, botId: f.botId, handoffDepth: 0 } }
+    const context = { toolCallId: 'call', messages: [], context: { turnId, roomId: f.roomId, botId: f.botId, actorUserId: null, handoffDepth: 0 } }
     const first = await tools.computer_click.execute!({ x: 1, y: 2 }, context) as ComputerToolOutput
     const second = await tools.computer_click.execute!({ x: 3, y: 4 }, context) as ComputerToolOutput
     await tools.computer_screenshot.execute!({}, context)

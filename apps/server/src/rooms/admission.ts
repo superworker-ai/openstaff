@@ -11,6 +11,8 @@ export interface PostMessageInput {
   roomId: string
   authorKind: 'user' | 'bot' | 'system'
   authorId: string | null
+  /** The member a bot turn acts for; a user post always acts for its author. */
+  actorUserId?: string | null
   text: string
   clientRequestId?: string | null
   attachments?: Array<Record<string, JsonValue>>
@@ -115,6 +117,7 @@ export class AdmissionService {
           roomId: input.roomId,
           botId: plan.botId,
           triggerMessageId: id,
+          actorUserId: input.authorKind === 'user' ? input.authorId : input.actorUserId ?? null,
           replyMode: plan.replyMode,
           status: 'queued',
           model: bot.model ?? workspaceRow?.defaultModel ?? 'xai/grok-4.6',

@@ -55,7 +55,7 @@ async function buildFeed(dependencies: ApiDependencies, userId: string): Promise
 
   if (!roomIds.length) {
     let apps: Awaited<ReturnType<typeof availableApps>> = []
-    try { apps = await availableApps(dependencies.registry, dependencies.composio) } catch { /* A missing provider must not break Home. */ }
+    try { apps = await availableApps(dependencies.registry, dependencies.composio, userId) } catch { /* A missing provider must not break Home. */ }
     const model = configuredModel(dependencies), connected = apps.some((app) => app.status === 'connected')
     return {
       feed: { generatedAt, bots: [], needsYou: [], now: [], done: [], upcoming: [], onboarding: { model, connected, hasBots: false, complete: false } },
@@ -88,7 +88,7 @@ async function buildFeed(dependencies: ApiDependencies, userId: string): Promise
   }))
 
   let apps: Awaited<ReturnType<typeof availableApps>> = []
-  try { apps = await availableApps(dependencies.registry, dependencies.composio) } catch { /* Installed providers can be temporarily unavailable. */ }
+  try { apps = await availableApps(dependencies.registry, dependencies.composio, userId) } catch { /* Installed providers can be temporarily unavailable. */ }
   for (const app of apps.filter((item) => item.status === 'expired').sort((left, right) => left.appName.localeCompare(right.appName))) {
     needsYou.push({
       kind: 'connection', id: app.slug, slug: app.slug, appName: app.appName, status: 'expired',

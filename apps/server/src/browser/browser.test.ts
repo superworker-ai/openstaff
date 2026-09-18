@@ -55,7 +55,7 @@ it.skipIf(process.env.SKIP_BROWSER_TESTS === '1')('browses a real page with ARIA
   const port = (server.address() as { port: number }).port
   const posted = await f.admission.post({ roomId: f.roomId, authorKind: 'user', authorId: f.userId, text: 'browse' })
   const turn = posted.turns[0]!, session = browser.session(turn.id, new TurnEventRecorder(f.db, undefined, turn.id, f.roomId))
-  const tools = browserTools(session), context = { toolCallId: 'call', messages: [], context: { turnId: turn.id, roomId: f.roomId, botId: f.botId, handoffDepth: 0 } }
+  const tools = browserTools(session), context = { toolCallId: 'call', messages: [], context: { turnId: turn.id, roomId: f.roomId, botId: f.botId, actorUserId: null, handoffDepth: 0 } }
   try {
     const snapshot = await tools.browser_navigate.execute!({ url: `http://127.0.0.1:${port}` }, context)
     expect(snapshot).toContain('Welcome')
@@ -83,7 +83,7 @@ it.skipIf(process.env.SKIP_BROWSER_TESTS === '1')('browses a real page with ARIA
 it('returns a clear tool error when Chromium cannot launch', async () => {
   const f = await fixture(), browser = new BrowserService(f.directory, async () => null, async () => { throw new Error('No executable') })
   const session = browser.session('turn_test', new TurnEventRecorder(f.db, undefined, 'turn_test', f.roomId))
-  try { expect(await browserTools(session).browser_snapshot.execute!({}, { toolCallId: 'a', messages: [], context: { roomId: f.roomId, botId: f.botId, turnId: 'turn_test', handoffDepth: 0 } })).toEqual({ error: expect.stringContaining('Browser unavailable') }) }
+  try { expect(await browserTools(session).browser_snapshot.execute!({}, { toolCallId: 'a', messages: [], context: { roomId: f.roomId, botId: f.botId, turnId: 'turn_test', actorUserId: null, handoffDepth: 0 } })).toEqual({ error: expect.stringContaining('Browser unavailable') }) }
   finally { await session.close(); await browser.close(); await f.close() }
 })
 
@@ -103,7 +103,7 @@ it.skipIf(process.env.SKIP_BROWSER_TESTS === '1')('blocks browser tools during h
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
   const posted = await f.admission.post({ roomId: f.roomId, authorKind: 'user', authorId: f.userId, text: 'wait for me' })
   const turn = posted.turns[0]!, session = browser.session(turn.id, new TurnEventRecorder(f.db, undefined, turn.id, f.roomId))
-  const tools = browserTools(session), context = { toolCallId: 'lease-call', messages: [], context: { turnId: turn.id, roomId: f.roomId, botId: f.botId, handoffDepth: 0 } }
+  const tools = browserTools(session), context = { toolCallId: 'lease-call', messages: [], context: { turnId: turn.id, roomId: f.roomId, botId: f.botId, actorUserId: null, handoffDepth: 0 } }
   try {
     await tools.browser_navigate.execute!({ url: `http://127.0.0.1:${(server.address() as { port: number }).port}` }, context)
     current = { ownerKind: 'human', ownerId: f.userId, ownerName: 'Juan', epoch: 1, acquiredAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 60_000).toISOString(), reason: null }

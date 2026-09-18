@@ -43,7 +43,7 @@ export function workspaceRoutes({ db, keys, registry, composio, computer, config
     const configured = keys.configured()
     const model = ['xai', 'anthropic', 'openai', 'opencode', 'aiGateway'].some((key) => configured[key as keyof typeof configured])
     const hasBots = Boolean((await db.select({ id: bots.id }).from(bots).limit(1))[0])
-    const connected = (await availableApps(registry, composio)).some((item) => item.status === 'connected')
+    const connected = (await availableApps(registry, composio, c.get('user').id)).some((item) => item.status === 'connected')
     return c.json({ model, connected, hasBots, complete: model && connected && hasBots })
   })
   app.get('/provider-keys', (c) => c.json({ configured: keys.configured() }))

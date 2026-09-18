@@ -15,10 +15,10 @@ import { toolApprovalFor } from './approval-policy.js'
 
 it('only connected MCP and Composio tools reach the model and status events measure the reduction', async () => {
   const f = await fixture(), fake = await fakeOAuthServer(), secrets = new Secrets(randomBytes(32)), registry = new PluginRegistry(f.db, secrets)
-  let active = false
+  let active: 'none' | 'member' | 'workspace' = 'none'
   const execute = vi.fn(async () => ({}))
   const composio = new ComposioService(f.db, f.admission, { get: () => undefined }, f.directory, {
-    connections: async () => active ? [{ id: 'gmail', toolkit: 'gmail', status: 'ACTIVE', createdAt: new Date().toISOString() }] : [], search: async () => [], metadata: async (slug) => ({ slug, toolkit: 'gmail', description: '' }), execute, link: async () => ({ redirectUrl: 'https://example.com' }), toolkits: async () => [{ slug: 'gmail', name: 'Gmail', description: '' }],
+    connections: async (userIds) => active === 'none' ? [] : [{ id: 'gmail', toolkit: 'gmail', status: 'ACTIVE', createdAt: new Date().toISOString(), userId: active === 'member' ? `workspace:${f.userId}` : 'workspace' }].filter((row) => userIds.includes(row.userId)), search: async () => [], metadata: async (slug) => ({ slug, toolkit: 'gmail', description: '' }), execute, link: async () => ({ redirectUrl: 'https://example.com' }), toolkits: async () => [{ slug: 'gmail', name: 'Gmail', description: '' }],
   })
   try {
     const id = await new PluginInstaller(f.db, f.directory, secrets, registry).install(`path:${await writeOAuthPlugin(f.directory, fake.url)}`)
@@ -33,17 +33,23 @@ it('only connected MCP and Composio tools reach the model and status events meas
     expect(JSON.stringify(model.doStreamCalls[0]?.prompt)).toContain('Gmail — installed, not connected')
     expect((await f.db.select().from(turnEvents)).find((event) => event.payload.tools)?.payload).toMatchObject({ tools: hidden.length, hiddenApps: expect.arrayContaining(['Gmail', 'Notion']) })
     const connections = new AgentConnections(registry, composio)
-    const gate = toolApprovalFor('auto', new Set(), undefined, async (call) => (await connections.missing(call.toolName, call.input))?.appName)
+    const gate = toolApprovalFor('auto', new Set(), undefined, async (call) => (await connections.missing(call.toolName, call.input, f.userId))?.appName)
     expect(await gate({ toolCall: { toolName: 'composio_execute', input: { slug: 'GMAIL_GET_EMAILS' } } })).toEqual({ type: 'user-approval', reason: 'connect:Gmail' })
     expect(execute).not.toHaveBeenCalled()
     await (await registry.oauth.server(id, 'Gmail')).saveTokens({ access_token: 'access-initial', token_type: 'Bearer' })
-    active = true
+    active = 'member'
     await composio.listConnections(true)
     await runtime.run(turn)
     const shown = model.doStreamCalls[1]!.tools!.map((tool) => tool.name)
     expect(shown).toContain('gmail__read_mail')
     expect(shown).toContain('composio_execute')
     expect(shown.length).toBeGreaterThan(hidden.length)
+    // The prompt names the account kind so a bot never implies it is using the wrong inbox.
+    expect(await connections.prompt(f.userId)).toContain('Gmail — connected (your account)')
+    expect(await connections.prompt(null)).toContain('Gmail — available, not connected (Composio)')
+    active = 'workspace'
+    await composio.listConnections(true)
+    expect(await connections.prompt(f.userId)).toContain('Gmail — connected (workspace)')
     expect(fake.toolCalls).toHaveLength(0)
   } finally { await registry.mcpPool.close(); await fake.stop(); await f.close() }
 })

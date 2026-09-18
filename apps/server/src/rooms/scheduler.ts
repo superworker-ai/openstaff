@@ -121,7 +121,7 @@ export class TurnScheduler {
         await this.finish(turn, 'skipped')
         return
       }
-      await this.admission.post({ roomId: turn.roomId, authorKind: 'bot', authorId: turn.botId, text: result.text, turnId: turn.id, handoffDepth: turn.handoffDepth })
+      await this.admission.post({ roomId: turn.roomId, authorKind: 'bot', authorId: turn.botId, actorUserId: turn.actorUserId, text: result.text, turnId: turn.id, handoffDepth: turn.handoffDepth })
       await this.finish(turn, 'done', { usage: result.usage })
     } catch (error) {
       if (signal.aborted) return

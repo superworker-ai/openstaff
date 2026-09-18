@@ -32,6 +32,7 @@ import { availableApps } from './app-catalog.js'
 import type { DurableWorkspace } from '../storage/durable.js'
 import { ComputerUseSession, computerTools, type DesktopToolComputer } from '../computer/computer-tools.js'
 import { pruneScreenshotContext, screenshotContextLimit, stripInlineFileData } from './screenshot-context.js'
+import { publicApprovals } from '../db/public.js'
 export { stripInlineFileData } from './screenshot-context.js'
 
 export type RunResult = { kind: 'done'; text: string; usage: Record<string, JsonValue> } | { kind: 'waiting' } | { kind: 'skipped' }
@@ -188,8 +189,8 @@ export class AgentRuntime {
     const screenshotLimit = screenshotContextLimit()
     const callMessages = pruneScreenshotContext(turn.modelMessages.length ? turn.modelMessages as unknown as ModelMessage[] : prompt.messages, screenshotLimit)
     let hasConnectedToolkits = false
-    try { hasConnectedToolkits = (await this.options.composio?.listConnections() ?? []).some((item) => item.status === 'ACTIVE') } catch { /* An unavailable app provider must not prevent local tools from running. */ }
-    hiddenApps.push(...(await availableApps(this.options.registry, this.options.composio)).filter((item) => item.status !== 'connected').map((item) => item.appName))
+    try { hasConnectedToolkits = (await this.options.composio?.listConnections() ?? []).some((item) => item.status === 'ACTIVE' && (item.scope === 'workspace' || item.userId === turn.actorUserId)) } catch { /* An unavailable app provider must not prevent local tools from running. */ }
+    hiddenApps.push(...(await availableApps(this.options.registry, this.options.composio, turn.actorUserId)).filter((item) => item.status !== 'connected').map((item) => item.appName))
     const managed = computer as Computer & { desktopSupported?: () => Promise<boolean> }
     const desktopTools = browser && await managed.desktopSupported?.() && typeof (computer as Partial<DesktopToolComputer>).captureScreen === 'function' && typeof (computer as Partial<DesktopToolComputer>).desktopInput === 'function'
       ? computerTools(new ComputerUseSession(computer as DesktopToolComputer, browser.screenRecorder, browser.displayGate, recorder, signal), browser.screenRecorder)
@@ -197,25 +198,25 @@ export class AgentRuntime {
     const agentTools: ToolSet & ReturnType<typeof createAgentTools> = {
       ...createAgentTools({ db, computer, durable: this.options.durable, admission, hub, registry: this.options.registry }),
       ...externalTools,
-      ...connections.tools(),
+      ...connections.tools(turn.actorUserId),
       ...(browser ? await this.observedBrowser(browser, turn, signal) : {}),
       ...desktopTools,
       ...(this.options.composio && hasConnectedToolkits ? composioTools(this.options.composio) : {}),
       ...(this.options.automationService ? automationTools(this.options.automationService) : {}),
     }
-    const context = { turnId: turn.id, botId: turn.botId, roomId: turn.roomId, handoffDepth: turn.handoffDepth }
+    const context = { turnId: turn.id, botId: turn.botId, roomId: turn.roomId, actorUserId: turn.actorUserId, handoffDepth: turn.handoffDepth }
     await recorder.record('status', { tools: Object.keys(agentTools).length, hiddenApps: [...new Set(hiddenApps)] })
     const delta = new DeltaBroadcaster(hub, turn)
     const agent = new ToolLoopAgent({
       model: this.modelResolver(turn.model, { sessionId: conversationId(turn) }),
-      instructions: `${prompt.instructions}\n\n${await connections.prompt()}`,
+      instructions: `${prompt.instructions}\n\n${await connections.prompt(turn.actorUserId)}`,
       tools: agentTools,
       toolsContext: Object.fromEntries(Object.keys(agentTools).map((name) => [name, context])) as { [K in keyof typeof agentTools]: AgentToolContext },
       stopWhen: [isStepCount(40), () => failedConnections.size > 0],
       maxOutputTokens: 4096,
       prepareStep: ({ messages }) => ({ messages: pruneScreenshotContext(messages, screenshotLimit) }),
       toolApproval: toolApprovalFor(bot.approvalPolicy, readOnly, this.options.composio?.isReadOnly.bind(this.options.composio), async (call) => {
-        const connection = await missingConnection?.(call.toolName) ?? await connections.missing(call.toolName, call.input)
+        const connection = await missingConnection?.(call.toolName) ?? await connections.missing(call.toolName, call.input, turn.actorUserId)
         if (connection) connectionRequests.set(call.toolCallId!, connection)
         return connection?.appName
       }),
@@ -289,7 +290,7 @@ export class AgentRuntime {
         await transaction.update(bots).set({ status: 'waiting_approval' }).where(eq(bots.id, turn.botId))
       })
       await recorder.record('status', { status: 'waiting_approval', approvalIds: pendingApprovals.map((approval) => approval.id) })
-      for (const approval of pendingApprovals) {
+      for (const approval of await publicApprovals(db, pendingApprovals)) {
         await admission.post({ roomId: turn.roomId, authorKind: 'system', authorId: null, text: approval.summary, attachments: [{ subtype: 'approval', approvalId: approval.id, botName: bot.name, ...(approval.connection ? { kind: 'connect', appName: approval.connection.appName } : {}) }], planReplies: false })
         hub?.broadcastRoom(turn.roomId, { type: 'approval.updated', approval, ts: now })
       }

@@ -8,6 +8,7 @@ export interface MarketplaceApp {
   aliases: string[]
   status: string
   toolkit: string
+  scope?: 'member' | 'workspace'
   plugins: Array<{ name: string; id?: string }>
 }
 export interface MarketplaceSkill extends MarketplaceEntry { installed: boolean; manifest?: PluginManifest }

@@ -40,6 +40,16 @@ describe('message admission', () => {
     expect(results.map((result) => result.message.seq).sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
   })
 
+  it('records the acting member: the author for a user post, the given actor for a bot post, none for a system post', async () => {
+    const authored = await service.post({ roomId, authorKind: 'user', authorId: userId, text: 'Read my mail' })
+    expect(authored.turns.map((turn) => turn.actorUserId)).toEqual([userId])
+    const botId = (await handle.db.select({ id: bots.id }).from(bots).limit(1))[0]!.id
+    const handedOff = await service.post({ roomId, authorKind: 'bot', authorId: botId, actorUserId: userId, text: 'continuing', explicitMentions: [{ kind: 'bot', id: botId, handoff: true }] })
+    expect(handedOff.turns.map((turn) => turn.actorUserId)).toEqual([userId])
+    const automated = await service.post({ roomId, authorKind: 'system', authorId: null, text: 'Daily digest', automationBotIds: [botId] })
+    expect(automated.turns.map((turn) => turn.actorUserId)).toEqual([null])
+  })
+
   it('deduplicates a client request without creating a second turn', async () => {
     const first = await service.post({ roomId, authorKind: 'user', authorId: userId, text: 'hello', clientRequestId: 'same' })
     const second = await service.post({ roomId, authorKind: 'user', authorId: userId, text: 'hello again', clientRequestId: 'same' })

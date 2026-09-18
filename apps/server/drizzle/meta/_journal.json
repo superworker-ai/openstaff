@@ -127,6 +127,13 @@
       "when": 1799769600017,
       "tag": "0017_verify_legacy_users",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1799769600018,
+      "tag": "0018_connection_scopes",
+      "breakpoints": true
     }
   ]
 }

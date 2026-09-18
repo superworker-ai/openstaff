@@ -49,7 +49,7 @@ async function cdpFixture() {
     const posted = await f.admission.post({ roomId: f.roomId, authorKind: 'user', authorId: f.userId, text })
     const value = posted.turns[0]!
     const session = browser.session(value.id, new TurnEventRecorder(f.db, undefined, value.id, f.roomId))
-    const context = { toolCallId: `cdp-${value.id}`, messages: [], context: { turnId: value.id, roomId: f.roomId, botId: f.botId, handoffDepth: 0 } }
+    const context = { toolCallId: `cdp-${value.id}`, messages: [], context: { turnId: value.id, roomId: f.roomId, botId: f.botId, actorUserId: null, handoffDepth: 0 } }
     return { value, session, tools: browserTools(session), context }
   }
   const close = async () => {

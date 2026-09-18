@@ -22,7 +22,7 @@ export const serverWireMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('computer.lease'), lease: computerLeaseSchema, ...timestamp }),
   z.object({ type: z.literal('computer.notice'), detail: z.string(), ...timestamp }),
   z.object({ type: z.literal('computer.storage'), storage: z.object({ kind: z.enum(['fs', 's3']), healthy: z.boolean(), bucket: z.string().optional(), fileCount: z.number().int().min(0), lastReconcileAt: z.string().optional(), lastWarning: z.string().optional() }), ...timestamp }),
-  z.object({ type: z.literal('connection.updated'), app: z.string(), status: z.enum(['connected', 'expired', 'not connected']), lastCheckedAt: z.string().nullable().optional(), error: z.string().nullable().optional(), ...timestamp }),
+  z.object({ type: z.literal('connection.updated'), app: z.string(), status: z.enum(['connected', 'expired', 'not connected']), userId: z.string().nullable().optional(), lastCheckedAt: z.string().nullable().optional(), error: z.string().nullable().optional(), ...timestamp }),
   z.object({ type: z.literal('message.created'), message: messageSchema, ...timestamp }),
   z.object({
     type: z.literal('message.delta'),

@@ -14,10 +14,10 @@ export function marketplaceRoutes(deps: ApiDependencies) {
     const entries = (await installer.marketplace.entries()).filter((entry) => !(entry.manifest?.minClientVersions?.grokbot === 'never' && entry.manifest?.minClientVersions?.cursor === 'never'))
     return c.json({ plugins: entries.map((entry) => ({ ...entry, installed: installed.has(entry.name) })) })
   })
-  app.get('/composio', async (c) => c.json(await composio.marketplace(c.req.query('q') ?? '')))
+  app.get('/composio', async (c) => c.json(await composio.marketplace(c.req.query('q') ?? '', c.get('user').id)))
   app.get('/apps', async (c) => {
     const q = normalizeQuery(c.req.query('q')), limit = clampLimit(c.req.query('limit'))
-    const catalog = await mergedApps(deps, q, limit)
+    const catalog = await mergedApps(deps, q, limit, c.get('user').id)
     const items = searchApps(catalog.apps, q)
     const version = revision([catalog.version, catalog.warming, catalog.apps])
     const page = paginate(items, q, version, limit, c.req.query('cursor'), catalog.warming)
@@ -27,7 +27,7 @@ export function marketplaceRoutes(deps: ApiDependencies) {
   })
   // Refresh one card after an action without rebuilding the client's page sequence.
   app.get('/apps/:slug', async (c) => {
-    const catalog = await mergedApps(deps)
+    const catalog = await mergedApps(deps, '', 24, c.get('user').id)
     const item = catalog.apps.find((item) => item.slug === appSlug(c.req.param('slug')))
     return item ? c.json({ app: item, configured: catalog.configured }) : c.json({ error: 'App not found' }, 404)
   })

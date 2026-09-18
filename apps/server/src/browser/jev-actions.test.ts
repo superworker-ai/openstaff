@@ -79,7 +79,7 @@ it.skipIf(process.env.SKIP_BROWSER_TESTS === '1')('parses the same grammar from 
   const turn = (await f.admission.post({ roomId: f.roomId, authorKind: 'user', authorId: f.userId, text: 'probe' })).turns[0]!
   const session = browser.session(turn.id, new TurnEventRecorder(f.db, undefined, turn.id, f.roomId))
   try {
-    await browserTools(session).browser_navigate.execute!({ url: `http://127.0.0.1:${(server.address() as { port: number }).port}` }, { toolCallId: 'probe', messages: [], context: { turnId: turn.id, roomId: f.roomId, botId: f.botId, handoffDepth: 0 } })
+    await browserTools(session).browser_navigate.execute!({ url: `http://127.0.0.1:${(server.address() as { port: number }).port}` }, { toolCallId: 'probe', messages: [], context: { turnId: turn.id, roomId: f.roomId, botId: f.botId, actorUserId: null, handoffDepth: 0 } })
     const controls = parseSnapshotControls(await session.snapshot())
     expect(controls.map((item) => [item.role, item.name, item.disabled, item.checked])).toEqual([
       ['textbox', 'Name', false, undefined],
@@ -242,7 +242,7 @@ async function runFixtureTask(task: FixtureTask) {
     return await runBoundedBrowserTask({
       task: { ...task, startUrl: new URL(task.startUrl, site.baseUrl).toString() },
       session, tools: browserTools(session),
-      toolContext: { toolCallId: task.id, messages: [], context: { turnId: turn.id, roomId: f.roomId, botId: f.botId, handoffDepth: 0 } } as never,
+      toolContext: { toolCallId: task.id, messages: [], context: { turnId: turn.id, roomId: f.roomId, botId: f.botId, actorUserId: null, handoffDepth: 0 } } as never,
       provider: new MockActionProvider(task.mock),
       verify: async () => task.verify(site.state()),
     })

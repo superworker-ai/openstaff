@@ -12,10 +12,10 @@ export async function pluginCatalog({ installer, db, registry }: ApiDependencies
   return { ...snapshot, entries: visible, installed }
 }
 
-export async function mergedApps(deps: ApiDependencies, q = '', limit = 24) {
-  const [pluginResult, catalog, servers] = await Promise.all([pluginCatalog(deps), deps.composio.catalogPage(q, limit), deps.registry.oauth.list()])
+export async function mergedApps(deps: ApiDependencies, q = '', limit = 24, actorUserId: string | null = null) {
+  const [pluginResult, catalog, servers] = await Promise.all([pluginCatalog(deps), deps.composio.catalogPage(q, limit, actorUserId), deps.registry.oauth.list()])
   const { entries, installed } = pluginResult
-  const apps = new Map<string, MarketplaceApp>(catalog.toolkits.map((item) => [appSlug(item.slug), { slug: appSlug(item.slug), name: item.name, description: item.description, logo: item.logo, aliases: [...appAliases(item.slug), ...(item.aliases ?? [])], status: item.connected ? 'Connected' : item.expired ? 'Expired' : 'Available', toolkit: item.slug, plugins: [] }]))
+  const apps = new Map<string, MarketplaceApp>(catalog.toolkits.map((item) => [appSlug(item.slug), { slug: appSlug(item.slug), name: item.name, description: item.description, logo: item.logo, aliases: [...appAliases(item.slug), ...(item.aliases ?? [])], status: item.connected ? 'Connected' : item.expired ? 'Expired' : 'Available', toolkit: item.slug, ...(item.scope ? { scope: item.scope } : {}), plugins: [] }]))
   for (const entry of entries.filter((entry) => entry.hasMcp)) {
     const row = installed.find((item) => item.name === entry.name)
     const slug = appSlug(entry.manifest?.displayName ?? entry.name), name = entry.manifest?.displayName ?? entry.name

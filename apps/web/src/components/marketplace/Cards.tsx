@@ -7,9 +7,9 @@ export function AppCard({ item, configured, disabled, onPlugin, onConfigured }: 
     {item.logo ? <img src={item.logo} alt="" className="mb-4 h-10 w-10 rounded-md object-contain" /> : <div className="mb-4 grid h-10 w-10 place-items-center rounded-md bg-surface-3 text-lg font-semibold">{item.name[0]}</div>}
     <h2 className="font-semibold">{item.name}</h2>
     <p className="mt-2 line-clamp-2 min-h-10 text-sm text-fg-muted">{item.description}</p>
-    <span className={`mt-4 self-start rounded-full px-2 py-1 text-xs ${item.status === 'Connected' ? 'bg-ok/10 text-ok' : 'bg-surface-3 text-fg-muted'}`}>{item.status}</span>
+    <span className={`mt-4 self-start rounded-full px-2 py-1 text-xs ${item.status === 'Connected' ? 'bg-ok/10 text-ok' : 'bg-surface-3 text-fg-muted'}`}>{item.status === 'Connected' && item.scope ? `Connected · ${item.scope === 'member' ? 'you' : 'workspace'}` : item.status}</span>
     <div className="mt-5 flex flex-1 flex-col items-start justify-end gap-3">
-      <ComposioConnect toolkit={item.toolkit} configured={configured} onConfigured={onConfigured} />
+      <ComposioConnect toolkit={item.toolkit} configured={configured} picker onConfigured={onConfigured} />
       {item.plugins.map((plugin) => <button key={plugin.name} disabled={disabled} className="text-sm underline underline-offset-4" onClick={() => onPlugin(plugin.name, plugin.id)}>{plugin.id ? 'Connect plugin' : 'Install plugin'}</button>)}
     </div>
   </article>

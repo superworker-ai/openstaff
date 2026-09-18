@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { connectionPath, type Approval } from '@openstaff/shared'
 import { api } from '../lib/api'
+import { loadMe } from '../lib/loaders'
 import { onConnectionMessage, openConnectionPopup } from '../lib/connection-popup'
 import { useConnectedApps } from '../hooks/useConnectedApps'
 import { ComposioConnect } from './ComposioConnect'
@@ -9,13 +11,17 @@ export function ConnectCard({ approval, onUpdate }: { approval: Approval; onUpda
   const [busy, setBusy] = useState(false), [error, setError] = useState('')
   const connection = approval.connection!
   const apps = useConnectedApps()
+  const me = useQuery({ queryKey: ['me'], queryFn: () => loadMe(), staleTime: 60_000 })
   const [connected, setConnected] = useState(false)
   useEffect(() => onConnectionMessage((message) => { if (message.approvalId === approval.id) setConnected(true) }), [approval.id])
+  // A personal account only unblocks the member the turn acts for; anyone else would connect the wrong inbox.
+  const isActor = !approval.actorUserId || approval.actorUserId === me.data?.user.id
+  const canManageWorkspace = Boolean(me.data && me.data.user.role !== 'member')
   const deny = async () => {
     setBusy(true)
     try { const result = await api<{ approval: Approval }>(`/api/approvals/${approval.id}`, { method: 'POST', body: JSON.stringify({ decision: 'deny', reason: 'The human chose Not now. Explain that the app is not connected.' }) }); onUpdate(result.approval) }
     catch (error) { setError(error instanceof Error ? error.message : 'Could not update request') }
     finally { setBusy(false) }
   }
-  return <div data-testid="connect-card" className="mb-5 max-w-lg rounded-lg border border-waiting/35 bg-surface-2 p-5"><p className="text-xs font-semibold uppercase tracking-wide text-waiting">Connection requested</p><p className="mt-2 font-medium text-fg">{approval.summary}</p><p className="mt-2 text-sm text-fg-muted">Sign in to continue this conversation. Your teammate will pick up where it left off.</p>{approval.status === 'pending' && !connected ? <div className="mt-4 flex items-center gap-3"><div>{connection.source === 'composio' ? (apps.data ? <ComposioConnect toolkit={connection.toolkit!} approvalId={approval.id} configured={apps.data.configured} label={apps.data.configured ? `Connect ${connection.appName}` : 'Connect with Composio'} /> : <p className="text-sm text-fg-muted">Checking apps…</p>) : <button disabled={busy} onClick={() => { try { openConnectionPopup(connectionPath(connection, approval.id)) } catch (error) { setError((error as Error).message) } }} className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-fg active:scale-[.97] disabled:opacity-40">{approval.resumeMode === 'retry' ? 'Reconnect' : 'Connect'} {connection.appName}</button>}</div><button disabled={busy} onClick={deny} className="rounded-md border border-line-strong px-4 py-2 text-sm text-fg hover:bg-surface-3">Not now</button></div> : <p className="mt-4 text-sm text-fg-muted">{(connected || approval.status === 'approved') ? 'Connected · Continuing conversation' : approval.status === 'denied' ? 'Not connected · Request declined' : 'Connection request expired'}</p>}{error && <p role="alert" className="mt-3 text-sm text-danger">{error}</p>}</div>
+  return <div data-testid="connect-card" className="mb-5 max-w-lg rounded-lg border border-waiting/35 bg-surface-2 p-5"><p className="text-xs font-semibold uppercase tracking-wide text-waiting">Connection requested</p><p className="mt-2 font-medium text-fg">{approval.summary}</p><p className="mt-2 text-sm text-fg-muted">{isActor ? 'Sign in to continue this conversation. Your teammate will pick up where it left off.' : `Waiting for ${approval.actorName ?? 'that member'} to connect ${connection.appName}.`}</p>{approval.status === 'pending' && !connected ? <div className="mt-4 flex flex-wrap items-center gap-3"><div>{connection.source === 'composio' ? (apps.data ? <ComposioConnect toolkit={connection.toolkit!} approvalId={approval.id} configured={apps.data.configured} disabled={!isActor} label={apps.data.configured ? `Connect ${connection.appName}` : 'Connect with Composio'} /> : <p className="text-sm text-fg-muted">Checking apps…</p>) : <button disabled={busy} onClick={() => { try { openConnectionPopup(connectionPath(connection, approval.id)) } catch (error) { setError((error as Error).message) } }} className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-fg active:scale-[.97] disabled:opacity-40">{approval.resumeMode === 'retry' ? 'Reconnect' : 'Connect'} {connection.appName}</button>}</div>{connection.source === 'composio' && canManageWorkspace && apps.data && <ComposioConnect toolkit={connection.toolkit!} approvalId={approval.id} configured={apps.data.configured} scope="workspace" label="Connect for everyone" />}<button disabled={busy} onClick={deny} className="rounded-md border border-line-strong px-4 py-2 text-sm text-fg hover:bg-surface-3">Not now</button></div> : <p className="mt-4 text-sm text-fg-muted">{(connected || approval.status === 'approved') ? 'Connected · Continuing conversation' : approval.status === 'denied' ? 'Not connected · Request declined' : 'Connection request expired'}</p>}{error && <p role="alert" className="mt-3 text-sm text-danger">{error}</p>}</div>
 }

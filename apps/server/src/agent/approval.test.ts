@@ -37,7 +37,7 @@ describe('approval pause and resume', () => {
   it('persists an approval request, resumes, and executes the approved tool', async () => {
     const trigger = { id: createId('message'), roomId, seq: 1, authorKind: 'user' as const, authorId: userId, text: 'Write a greeting file', mentions: [], attachments: [], turnId: null, clientRequestId: 'approval-test', createdAt: new Date().toISOString() }
     await handle.db.insert(messages).values(trigger)
-    const turn: Turn = { id: createId('turn'), roomId, botId, triggerMessageId: trigger.id, replyMode: 'direct', status: 'running', model: 'xai/mock', modelMessages: [], usage: null, error: null, startedAt: new Date().toISOString(), finishedAt: null, handoffDepth: 0 }
+    const turn: Turn = { id: createId('turn'), roomId, botId, triggerMessageId: trigger.id, actorUserId: null, replyMode: 'direct', status: 'running', model: 'xai/mock', modelMessages: [], usage: null, error: null, startedAt: new Date().toISOString(), finishedAt: null, handoffDepth: 0 }
     await handle.db.insert(turns).values(turn)
     const model = new MockLanguageModelV3({ doStream: [
       mockStream([{ type: 'stream-start', warnings: [] }, { type: 'tool-call', toolCallId: 'call-1', toolName: 'write_file', input: '{"path":"hello.txt","content":"hello"}' }, { type: 'finish', finishReason: { unified: 'tool-calls', raw: undefined }, usage: mockUsage }]),
@@ -57,7 +57,7 @@ describe('approval pause and resume', () => {
   it('returns a denied tool output to the model and continues without executing it', async () => {
     const trigger = { id: createId('message'), roomId, seq: 1, authorKind: 'user' as const, authorId: userId, text: 'Write a secret file', mentions: [], attachments: [], turnId: null, clientRequestId: 'denial-test', createdAt: new Date().toISOString() }
     await handle.db.insert(messages).values(trigger)
-    const turn: Turn = { id: createId('turn'), roomId, botId, triggerMessageId: trigger.id, replyMode: 'direct', status: 'running', model: 'xai/mock', modelMessages: [], usage: null, error: null, startedAt: new Date().toISOString(), finishedAt: null, handoffDepth: 0 }
+    const turn: Turn = { id: createId('turn'), roomId, botId, triggerMessageId: trigger.id, actorUserId: null, replyMode: 'direct', status: 'running', model: 'xai/mock', modelMessages: [], usage: null, error: null, startedAt: new Date().toISOString(), finishedAt: null, handoffDepth: 0 }
     await handle.db.insert(turns).values(turn)
     const model = new MockLanguageModelV3({ doStream: [
       mockStream([{ type: 'stream-start', warnings: [] }, { type: 'tool-call', toolCallId: 'call-denied', toolName: 'write_file', input: '{"path":"denied.txt","content":"secret"}' }, { type: 'finish', finishReason: { unified: 'tool-calls', raw: undefined }, usage: mockUsage }]),

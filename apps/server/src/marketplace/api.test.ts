@@ -13,7 +13,7 @@ it('serves authenticated cold pages without waiting for the catalog, then pagina
   const client = marketplaceClient()
   let finish!: (rows: typeof toolkitRows) => void
   client.toolkits = vi.fn(() => new Promise<typeof toolkitRows>((resolve) => { finish = resolve }))
-  client.connections = async () => [{ id: 'active', toolkit: 'app-005', status: 'ACTIVE', createdAt: new Date().toISOString() }, { id: 'expired', toolkit: 'app-010', status: 'EXPIRED', createdAt: new Date().toISOString() }]
+  client.connections = async () => [{ id: 'active', toolkit: 'app-005', status: 'ACTIVE', createdAt: new Date().toISOString(), userId: 'workspace' }, { id: 'expired', toolkit: 'app-010', status: 'EXPIRED', createdAt: new Date().toISOString(), userId: 'workspace' }]
   const running = await startServer({ config: { dataDir: directory, port: 0, signupCode: '' }, composioClient: client })
   const entries = [...skillRows, { name: 'app-plugin', source: './app-plugin', hasMcp: true, manifest: { name: 'app-plugin', displayName: 'App 020' } }]
   vi.spyOn(running.dependencies.installer.marketplace, 'snapshot').mockReturnValue({ entries, warming: false })

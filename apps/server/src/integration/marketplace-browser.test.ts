@@ -90,10 +90,11 @@ describe.skipIf(process.env.SKIP_BROWSER_TESTS === '1')('paginated Marketplace i
     const listener = (request: { url(): string }) => { if (new URL(request.url()).pathname === '/api/marketplace/apps') requests.push(request.url()) }
     h.page.on('request', listener)
     try {
-      vi.mocked(client.connections).mockResolvedValue([{ id: 'connected-app', toolkit: 'app-030', status: 'ACTIVE', createdAt: new Date().toISOString() }])
-      await h.api.dependencies.composio.verifyConnection('app-030')
+      vi.mocked(client.connections).mockResolvedValue([{ id: 'connected-app', toolkit: 'app-030', status: 'ACTIVE', createdAt: new Date().toISOString(), userId: 'workspace' }])
+      await h.api.dependencies.composio.verifyConnection('app-030', 'workspace')
       h.api.dependencies.hub.broadcastAll({ type: 'connection.updated', app: 'App 030', status: 'connected', ts: new Date().toISOString() })
-      await card.getByText('Connected', { exact: true }).waitFor()
+      // The pill names the account kind now that a workspace account is not everyone's personal one.
+      await card.getByText('Connected · workspace', { exact: true }).waitFor()
       await count(48)
       expect(await h.page.evaluate(() => window.scrollY)).toBe(y)
       expect(requests).toEqual([])

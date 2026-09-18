@@ -157,6 +157,7 @@ export const turnSchema = z.object({
   roomId: idSchema,
   botId: idSchema,
   triggerMessageId: idSchema,
+  actorUserId: z.string().nullable(),
   replyMode: z.enum(['direct', 'optional']),
   status: z.enum(['queued', 'running', 'waiting_approval', 'done', 'skipped', 'failed', 'cancelled']),
   model: z.string(),
@@ -182,6 +183,8 @@ export const turnEventSchema = z.object({
 export const approvalDecisionSchema = z.enum(['approve', 'deny', 'human_completed'])
 
 export const approvalSchema = z.object({
+  actorUserId: z.string().nullable().optional(),
+  actorName: z.string().nullable().optional(),
   resumeMode: z.enum(['tool', 'retry', 'connection']).optional(),
   kind: z.enum(['approval', 'connect']).optional(),
   connection: z.object({ source: z.enum(['mcp', 'composio']), pluginId: z.string().optional(), serverName: z.string().optional(), toolkit: z.string().optional(), appName: z.string(), connectUrl: z.string().optional() }).nullable().optional(),

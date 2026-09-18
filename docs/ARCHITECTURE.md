@@ -71,7 +71,8 @@ their historical `rtn_` identifiers.
   (`user` | `bot` | `system`), author_id, text (markdown), mentions JSON (`[{kind,id}]`),
   attachments JSON, turn_id (nullable, the turn that produced it), client_request_id
   (unique per author; idempotent posting), created_at
-- `turns` — id, room_id, bot_id, trigger_message_id, reply_mode (`direct` | `optional`),
+- `turns` — id, room_id, bot_id, trigger_message_id, actor_user_id (the member this turn acts
+  for, nullable, no FK so deleted members do not break history), reply_mode (`direct` | `optional`),
   status (`queued` | `running` | `waiting_approval` | `done` | `skipped` | `failed` |
   `cancelled`), model, model_messages JSON (AI SDK ModelMessage[] for resume), usage JSON
   (tokens, cost), error, started_at, finished_at, handoff_depth
@@ -94,7 +95,9 @@ their historical `rtn_` identifiers.
   root_path, manifest JSON, enabled, variables JSON (encrypted at rest with
   `SECRETS_KEY`), installed_at
 - `connections` — id, provider (`composio`), toolkit slug, composio_connected_account_id,
-  status, created_at. Shared by all bots (Grok Bot: "plugins are shared across agents").
+  status, created_at, scope (`workspace` | `member`), user_id (null for workspace), indexed on
+  (toolkit, scope, user_id). Workspace-scoped accounts are shared by all bots (Grok Bot: "plugins
+  are shared across agents"); member-scoped accounts belong to one person.
 - `provider_keys` — provider (`xai` | `anthropic` | `openai` | `opencode` | `composio` | `aiGateway`),
   encrypted key. Database keys take precedence over environment values; clearing a
   saved key restores the environment fallback. The API only returns configured flags.
@@ -324,6 +327,25 @@ after reconnect a deduplicated follow-up tells the model to retry the original a
 Command-only `connection` approvals complete without invoking the model.
 Resumed optional turns bypass the reply decision. Stdio approval annotations are preserved.
 
+### Connection scopes
+A Composio connection is either `workspace` (shared by every member and bot; only an owner or admin
+may add or remove one) or `member` (personal to one person; anyone may add their own and remove it,
+owners and admins may remove anybody's). The Composio user id carries the scope: workspace accounts
+use `COMPOSIO_USER_ID` unchanged, member accounts use `<COMPOSIO_USER_ID>:<user id>`, so hosted
+tenants stay isolated and existing accounts stay workspace-scoped with no Composio-side migration.
+
+Every turn acts for at most one member (`turns.actor_user_id`): a member's own message sets it, and
+bot replies, handoffs, room `/connect` turns and automation runs (the creator, when that member still
+exists) inherit it. Resolving toolkit T for actor U: U's ACTIVE personal account, else the ACTIVE
+workspace account, else a `connect` approval through the existing connection-request flow. A
+system-originated turn with no actor only ever sees workspace accounts. Execution failures expire the
+single account that failed, not the toolkit. `GET /api/connections` returns the caller's own rows plus
+every workspace row, and for owners and admins other members' rows with their name; Settings groups
+them as Your / Workspace / Members' connections. `/api/connections/start?scope=workspace` from a plain
+member renders the popup failure page instead of linking. Prompts name the account kind
+(`Gmail — connected (your account)` or `connected (workspace)`) so a bot never implies it is using
+someone else's inbox.
+
 The authenticated callback is `/api/plugins/oauth/callback`, based on `PUBLIC_APP_URL`
 (default `http://localhost:3000`). It stays behind `requireAuth` and the owner check.
 The same-origin web proxy forwards the HttpOnly SameSite=Lax cookie on top-level GET
@@ -338,7 +360,8 @@ The install response includes discovered server auth (`none`, `dcr`, `manual-cli
 it responds to popup completion messages, with two-second polling as a fallback. The same UI is available from Settings Plugins
 and `/connect/<pluginId>/<server>?approval=<id>` in a 520×720 popup. Callback errors are stored
 for the dialog and translated into plain language. Verified callbacks auto-approve matching
-pending connection requests and enqueue the turn once; inactive accounts cannot approve.
+pending connection requests and enqueue the turn once; inactive accounts cannot approve, and a
+personal connection only resumes turns that act for the member who linked it.
 Composio links use `/api/connections/callback?approval=<id>` and re-fetch ACTIVE status,
 retrying four times 600 ms apart because Composio redirects before the account flips to
 ACTIVE. Both callbacks render a nonce-protected page posting `{ type: 'openstaff:connected',
@@ -381,7 +404,8 @@ HTTP fixtures cover PKCE, state, credential secrecy, missing credentials, DCR, t
 calls, and refresh. The shared browser harness tests the cross-site callback through
 the real web proxy, using temporary data directories and ephemeral ports.
 
-**Composio**: `@composio/core`, `userId = 'workspace'`. Search and execute tools call
+**Composio**: `@composio/core`, workspace identity `COMPOSIO_USER_ID` (default `workspace`).
+Search and execute tools call
 the core SDK directly; `request_connection` owns interactive connection pauses.
 Connections are listed from Composio and mirrored atomically into `connections`.
 Composio connection state is revalidated at the execution gate and callback; disconnect
@@ -464,7 +488,7 @@ ids for authorship.
 `GET /api/plugins/:id/servers`, `PUT /api/plugins/:id/servers/:server/client` `{ clientId, clientSecret? }`
 `POST /api/plugins/:id/servers/:server/connect` `{ scopes? }`, `DELETE /api/plugins/:id/servers/:server/connection`
 `GET /api/plugins/oauth/callback?code&state&iss` (authenticated top-level GET, redirects to Settings)
-`GET /api/marketplace/cursor`, `GET /api/marketplace/composio?q=`, `POST /api/connections/link` `{ toolkit }`, `GET /api/connections`
+`GET /api/marketplace/cursor`, `GET /api/marketplace/composio?q=`, `POST /api/connections/link` `{ toolkit, scope? }`, `GET /api/connections` → `{ connections, canManageWorkspace, servers, clients }`
 `GET /api/marketplace/apps?q=&cursor=&limit=24` → `{ apps, nextCursor, total, configured, warming }`
 `GET /api/marketplace/skills?q=&cursor=&limit=24` → `{ skills, nextCursor, total, configured, warming }`
 `GET /api/marketplace/apps/:slug` → `{ app, configured }` (in-place card refresh after actions)

@@ -15,6 +15,7 @@ export const toolContextSchema = z.object({
   turnId: z.string(),
   botId: z.string(),
   roomId: z.string(),
+  actorUserId: z.string().nullable(),
   handoffDepth: z.number().int().min(0),
 })
 export type AgentToolContext = z.infer<typeof toolContextSchema>
@@ -152,7 +153,7 @@ export function createAgentTools(dependencies: ToolDependencies) {
         const task = resolvedTaskId ? (await db.select().from(tasks).where(eq(tasks.id, resolvedTaskId)).limit(1))[0] : undefined
         if (task) hub?.broadcastRoom(context.roomId, { type: 'task.updated', task, ts: now })
         const explicit: Mention[] = [{ kind: 'bot', id: target.id, handoff: true }]
-        await admission.post({ roomId: context.roomId, authorKind: 'bot', authorId: context.botId, text: `@${target.name} ${brief}`, explicitMentions: explicit, handoffDepth: context.handoffDepth })
+        await admission.post({ roomId: context.roomId, authorKind: 'bot', authorId: context.botId, actorUserId: context.actorUserId, text: `@${target.name} ${brief}`, explicitMentions: explicit, handoffDepth: context.handoffDepth })
         return { handedOffTo: target.id, taskId: resolvedTaskId }
       },
     }),

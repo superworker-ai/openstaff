@@ -14,7 +14,8 @@ export const providerKeys = sqliteTable('provider_keys', {
 export const connections = sqliteTable('connections', {
   id: text('id').primaryKey(), provider: text('provider').notNull(), toolkit: text('toolkit').notNull(),
   composioConnectedAccountId: text('composio_connected_account_id').notNull().unique(), status: text('status').notNull(), createdAt: text('created_at').notNull(),
-})
+  scope: text('scope', { enum: ['workspace', 'member'] }).notNull().default('workspace'), userId: text('user_id'),
+}, (table) => [index('connections_toolkit_scope_user_idx').on(table.toolkit, table.scope, table.userId)])
 export const roomSummaries = sqliteTable('room_summaries', {
   roomId: text('room_id').primaryKey(), upToSeq: integer('up_to_seq').notNull(), summary: text('summary').notNull(), lastCompactedSeq: integer('last_compacted_seq').notNull(),
 })

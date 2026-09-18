@@ -6,7 +6,7 @@ import type { AppEnv, ApiDependencies } from './context.js'
 import { isResponse, parseBody } from './helpers.js'
 import { z } from 'zod'
 import { AgentConnections } from '../agent/connections.js'
-import { publicTurn } from '../db/public.js'
+import { publicApprovals, publicTurn } from '../db/public.js'
 import { approvalDecisionSchema } from '@openstaff/shared'
 
 export function turnRoutes({ db, scheduler }: ApiDependencies): Hono<AppEnv> {
@@ -35,7 +35,7 @@ export function approvalRoutes({ db, scheduler, hub, admission, registry, compos
     const user = context.get('user')
     const isMember = (await db.select().from(roomMembers).where(and(eq(roomMembers.roomId, roomId), eq(roomMembers.memberKind, 'user'), eq(roomMembers.memberId, user.id))).limit(1))[0]
     if (!isMember) return context.json({ error: 'Room not found' }, 404)
-    return context.json({ approvals: await db.select().from(approvals).where(eq(approvals.roomId, roomId)).orderBy(asc(approvals.createdAt), sql`${approvals}.rowid`) })
+    return context.json({ approvals: await publicApprovals(db, await db.select().from(approvals).where(eq(approvals.roomId, roomId)).orderBy(asc(approvals.createdAt), sql`${approvals}.rowid`)) })
   })
   app.post('/:id', async (context) => {
     const id = context.req.param('id')
@@ -44,15 +44,17 @@ export function approvalRoutes({ db, scheduler, hub, admission, registry, compos
     const user = context.get('user')
     const approval = (await db.select().from(approvals).innerJoin(roomMembers, eq(roomMembers.roomId, approvals.roomId)).where(and(eq(approvals.id, id), eq(roomMembers.memberKind, 'user'), eq(roomMembers.memberId, user.id))).limit(1))[0]?.approvals
     if (!approval) return context.json({ error: 'Approval not found' }, 404)
-    if (input.decision === 'approve' && approval.kind === 'connect' && (!approval.connection || !await new AgentConnections(registry, composio).connected(approval.connection))) return context.json({ error: 'Connect the app before continuing' }, 409)
+    const actorUserId = (await db.select({ actorUserId: turns.actorUserId }).from(turns).where(eq(turns.id, approval.turnId)).limit(1))[0]?.actorUserId ?? null
+    if (input.decision === 'approve' && approval.kind === 'connect' && (!approval.connection || !await new AgentConnections(registry, composio).connected(approval.connection, actorUserId))) return context.json({ error: 'Connect the app before continuing' }, 409)
     const decision = input.decision === 'approve' ? true : input.decision === 'human_completed' ? 'human_completed' as const : false
     const turn = await appendApprovalResponse(db, id, decision, input.reason, { decidedBy: user.id, hub, admission })
     if (!turn) return context.json({ error: 'Approval is no longer pending' }, 409)
     const updated = (await db.select().from(approvals).where(eq(approvals.id, id)))[0]!
-    hub.broadcastRoom(approval.roomId, { type: 'approval.updated', approval: updated, ts: new Date().toISOString() })
+    const shared = await publicApprovals(db, [updated])
+    hub.broadcastRoom(approval.roomId, { type: 'approval.updated', approval: shared[0]!, ts: new Date().toISOString() })
     hub.broadcastRoom(approval.roomId, { type: 'turn.updated', turn: publicTurn(turn), ts: new Date().toISOString() })
     if (turn.status === 'queued') scheduler.enqueue([turn])
-    return context.json({ approval: updated })
+    return context.json({ approval: shared[0]! })
   })
   return app
 }

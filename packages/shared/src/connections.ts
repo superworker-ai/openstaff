@@ -13,6 +13,7 @@ export interface ConnectedApp extends AppConnection {
   logo?: string
   lastCheckedAt?: string | null
   error?: string | null
+  scope?: 'member' | 'workspace'
 }
 
 export const suggestedApps: Record<string, string[]> = { research: ['google-drive', 'notion'], growth: ['gmail', 'hubspot', 'google-sheets'], engineer: ['github', 'slack'], ops: ['google-calendar', 'gmail', 'todoist'], custom: [] }
@@ -28,10 +29,11 @@ export function appName(name: string): string {
   const names: Record<string, string> = { gmail: 'Gmail', googledrive: 'Google Drive', googlecalendar: 'Google Calendar', googlesheets: 'Google Sheets', notion: 'Notion', hubspot: 'HubSpot', github: 'GitHub', slack: 'Slack', todoist: 'Todoist' }
   return names[appSlug(name)] ?? name
 }
-export function connectionPath(connection: AppConnection, approval?: string): string {
+export function connectionPath(connection: AppConnection, approval?: string, scope?: 'member' | 'workspace'): string {
   const path = connection.source === 'mcp' ? `/connect/${encodeURIComponent(connection.pluginId!)}/${encodeURIComponent(connection.serverName!)}` : '/api/connections/start'
   const query = new URLSearchParams(approval ? { approval } : {})
   if (connection.toolkit) query.set('toolkit', connection.toolkit)
+  if (scope) query.set('scope', scope)
   return `${path}${query.size ? `?${query}` : ''}`
 }
 export function connectionError(error: unknown): string {

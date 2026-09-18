@@ -44,7 +44,7 @@ describe.skipIf(process.env.SKIP_BROWSER_TESTS === '1')('connection flows in the
       textStream('Your inbox says hello from fake OAuth.'),
     ] })
     h = await browserHarness({ hostname: 'localhost', modelResolver: () => model, composioClient: {
-      connections: async () => [...composioActive].map((toolkit) => ({ id: `${toolkit}-account`, toolkit, status: 'ACTIVE', createdAt: new Date().toISOString() })), search: async () => [], metadata: async (slug) => ({ slug, toolkit: 'gmail', description: '' }), execute: async () => ({}), link: async (toolkit, callback) => { composioActive.add(toolkit); return { redirectUrl: viaCoopIdp ? `${idp.url}/consent?next=${encodeURIComponent(callback!)}` : callback! } },
+      connections: async () => [...composioActive].map((toolkit) => ({ id: `${toolkit}-account`, toolkit, status: 'ACTIVE', createdAt: new Date().toISOString(), userId: 'workspace' })), search: async () => [], metadata: async (slug) => ({ slug, toolkit: 'gmail', description: '' }), execute: async () => ({}), link: async (toolkit, _userId, callback) => { composioActive.add(toolkit); return { redirectUrl: viaCoopIdp ? `${idp.url}/consent?next=${encodeURIComponent(callback!)}` : callback! } },
       toolkits: async () => [{ slug: 'gmail', name: 'Gmail', description: 'Read, organize, and reply to email.' }, { slug: 'googledrive', name: 'Google Drive', description: 'Find and work with your documents.' }, { slug: 'github', name: 'GitHub', description: 'Work with repositories and issues.' }],
     } })
     h.page.on('pageerror', (error) => errors.push(error.message))

@@ -223,7 +223,7 @@ export class AutomationService {
       const startable = targets.filter((target) => !busyIds.has(target.id))
       if (startable.length) {
         const text = await this.messageText(automation, input)
-        await this.admission.post({ roomId: automation.roomId, authorKind: 'system', authorId: null, text, automationBotIds: startable.map((target) => target.id), beforeEnqueue: async ({ message, turns: admittedTurns }) => {
+        await this.admission.post({ roomId: automation.roomId, authorKind: 'system', authorId: null, actorUserId: await this.existingUser(automation.createdBy), text, automationBotIds: startable.map((target) => target.id), beforeEnqueue: async ({ message, turns: admittedTurns }) => {
           const lastRunAt = this.clock.now().toISOString()
           await this.db.transaction(async (transaction) => {
             await transaction.update(automationInvocations).set({ messageId: message.id }).where(eq(automationInvocations.id, invocation.id))
@@ -289,6 +289,11 @@ export class AutomationService {
 
   private async row(id: string): Promise<AutomationRow | undefined> {
     return (await this.db.select().from(automations).where(eq(automations.id, id)).limit(1))[0]
+  }
+
+  /** A scheduled turn acts for whoever created the automation, unless that member is gone. */
+  private async existingUser(id: string): Promise<string | null> {
+    return (await this.db.select({ id: users.id }).from(users).where(eq(users.id, id)).limit(1))[0]?.id ?? null
   }
 
   private toPublic(row: AutomationRow): Automation {
