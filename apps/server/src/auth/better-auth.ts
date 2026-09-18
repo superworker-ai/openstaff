@@ -138,6 +138,8 @@ export function createAuth(config: Config, db: Database, dependencies: { sendEma
     advanced: {
       useSecureCookies: process.env.NODE_ENV === 'production',
       cookiePrefix: 'openstaff',
+      // Behind the gateway the socket peer is the proxy; read the same headers the audit log trusts so rate limits are per client, not one shared bucket.
+      ipAddress: { ipAddressHeaders: ['cf-connecting-ip', 'x-forwarded-for', 'x-real-ip'] },
       database: { generateId: ({ model }) => createId(modelIds[model] ?? 'verification') },
     },
     trustedOrigins: config.trustedOrigins,
