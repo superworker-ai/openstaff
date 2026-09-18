@@ -119,8 +119,9 @@ export function invitationRoutes({ db, config, sendEmail, audit }: Pick<ApiDepen
   // The admin needs the link itself whenever email is not configured, so every send returns it and nothing is stored.
   const deliver = async (context: Context, email: string, role: 'admin' | 'member', token: string) => {
     const workspaceName = (await db.select({ name: workspace.name }).from(workspace).where(eq(workspace.id, 'workspace')).limit(1))[0]?.name ?? 'OpenStaff'
-    const inviteUrl = new URL(`/invite/${token}`, publicOrigin(context, config)).toString()
-    await sendEmail({ to: email, ...invitationTemplate(workspaceName, role, inviteUrl) })
+    const appUrl = publicOrigin(context, config)
+    const inviteUrl = new URL(`/invite/${token}`, appUrl).toString()
+    await sendEmail({ to: email, ...await invitationTemplate(workspaceName, role, inviteUrl, { appUrl, inviterName: context.get('user').name }) })
     return { inviteUrl, delivery: config.email.provider === 'console' ? 'link' as const : 'email' as const }
   }
   app.get('/', async (context) => {

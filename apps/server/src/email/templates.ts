@@ -1,34 +1,37 @@
+import { render } from '@react-email/render'
+import { createElement, type ReactElement } from 'react'
+import { Invitation } from './templates/Invitation.js'
+import type { EmailContext } from './templates/Layout.js'
+import { MagicLink } from './templates/MagicLink.js'
+import { ResetPassword } from './templates/ResetPassword.js'
+import { VerifyEmail } from './templates/VerifyEmail.js'
+
+export type { EmailContext }
+
 export interface EmailTemplate {
   subject: string
   text: string
   html: string
 }
 
-function escapeHtml(value: string): string {
-  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;')
+// The components live in ./templates; this module only builds props and renders both parts.
+async function build(subject: string, element: ReactElement): Promise<EmailTemplate> {
+  const [html, text] = await Promise.all([render(element), render(element, { plainText: true })])
+  return { subject, text, html }
 }
 
-function linkTemplate(subject: string, introduction: string, url: string, action: string, expiry: string): EmailTemplate {
-  const safeUrl = escapeHtml(url), safeIntroduction = escapeHtml(introduction)
-  return {
-    subject,
-    text: `${introduction}\n\n${url}\n\n${expiry}`,
-    html: `<p>${safeIntroduction}</p><p><a href="${safeUrl}">${escapeHtml(action)}</a></p><p>${escapeHtml(expiry)}</p>`,
-  }
+export async function verifyEmailTemplate(url: string, context: EmailContext = {}): Promise<EmailTemplate> {
+  return build('Verify your OpenStaff email', createElement(VerifyEmail, { ...context, url }))
 }
 
-export function verifyEmailTemplate(url: string): EmailTemplate {
-  return linkTemplate('Verify your OpenStaff email', 'Verify your email address to finish signing in to OpenStaff.', url, 'Verify email', 'This link expires in one hour.')
+export async function resetPasswordTemplate(url: string, context: EmailContext = {}): Promise<EmailTemplate> {
+  return build('Reset your OpenStaff password', createElement(ResetPassword, { ...context, url }))
 }
 
-export function resetPasswordTemplate(url: string): EmailTemplate {
-  return linkTemplate('Reset your OpenStaff password', 'Use this link to choose a new OpenStaff password.', url, 'Reset password', 'This link expires in one hour. Ignore this email if you did not request it.')
+export async function magicLinkTemplate(url: string, context: EmailContext = {}): Promise<EmailTemplate> {
+  return build('Your OpenStaff sign-in link', createElement(MagicLink, { ...context, url }))
 }
 
-export function magicLinkTemplate(url: string): EmailTemplate {
-  return linkTemplate('Your OpenStaff sign-in link', 'Use this secure link to sign in to OpenStaff.', url, 'Sign in', 'This link expires in five minutes and can be used once.')
-}
-
-export function invitationTemplate(workspaceName: string, role: 'admin' | 'member', url: string): EmailTemplate {
-  return linkTemplate(`Join ${workspaceName} on OpenStaff`, `You have been invited to join ${workspaceName} as ${role === 'admin' ? 'an administrator' : 'a member'}.`, url, 'Accept invitation', 'This invitation expires in seven days.')
+export async function invitationTemplate(workspaceName: string, role: 'admin' | 'member', url: string, context: EmailContext = {}): Promise<EmailTemplate> {
+  return build(`Join ${workspaceName} on OpenStaff`, createElement(Invitation, { ...context, url, role, workspaceName }))
 }

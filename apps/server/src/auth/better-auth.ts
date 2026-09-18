@@ -100,7 +100,7 @@ export function createAuth(config: Config, db: Database, dependencies: { sendEma
     magicLink({
       storeToken: 'hashed',
       rateLimit: { window: 60, max: 5 },
-      sendMagicLink: async ({ email, url }) => sendEmail({ to: email, ...magicLinkTemplate(url) }),
+      sendMagicLink: async ({ email, url }) => sendEmail({ to: email, ...await magicLinkTemplate(url, { appUrl: config.publicAppUrl }) }),
     }),
     sso({
       provisionUser: async ({ user, provider }) => {
@@ -159,11 +159,11 @@ export function createAuth(config: Config, db: Database, dependencies: { sendEma
       maxPasswordLength: 200,
       requireEmailVerification: requireVerification,
       password: { verify: async ({ hash, password }) => hash.startsWith('scrypt:') ? verifyLegacyPassword(password, hash) : verifyPassword({ hash, password }) },
-      sendResetPassword: async ({ user, url }) => sendEmail({ to: user.email, ...resetPasswordTemplate(url) }),
+      sendResetPassword: async ({ user, url }) => sendEmail({ to: user.email, ...await resetPasswordTemplate(url, { appUrl: config.publicAppUrl }) }),
     },
     emailVerification: {
       sendOnSignUp: requireVerification,
-      sendVerificationEmail: async ({ user, url }) => sendEmail({ to: user.email, ...verifyEmailTemplate(url) }),
+      sendVerificationEmail: async ({ user, url }) => sendEmail({ to: user.email, ...await verifyEmailTemplate(url, { appUrl: config.publicAppUrl }) }),
     },
     socialProviders: config.social,
     account: { accountLinking: { enabled: true, trustedProviders: configuredSocialProviders } },

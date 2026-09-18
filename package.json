@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "concurrently -k -n server,web -c blue,magenta \"pnpm --filter server dev\" \"pnpm --filter web dev\"",
     "dev:landing": "pnpm --filter landing dev",
+    "email:dev": "pnpm --filter server exec email dev --dir src/email/templates",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "lint": "eslint .",

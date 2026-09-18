@@ -17,6 +17,9 @@ magic-link, and invitation URLs to stdout. Production email can use `smtp` with 
 `resend` with `RESEND_API_KEY`; both require `EMAIL_FROM`. Set `AUTH_TRUSTED_ORIGINS` when
 browsers use origins beyond `PUBLIC_APP_URL`.
 
+The branded templates are React Email components in `apps/server/src/email/templates`; preview them
+with `pnpm email:dev`. Keep `EMAIL_FROM` on the same domain as `PUBLIC_APP_URL` for deliverability.
+
 ### Members and invitations
 
 `AUTH_SIGNUP` has three modes. `invite` (the default) admits only emails holding a live
