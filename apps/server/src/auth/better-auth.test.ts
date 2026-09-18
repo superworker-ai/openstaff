@@ -179,8 +179,29 @@ it('runs an invitation round trip with only a SHA-256 token hash stored', async 
     const invitee = await signedIn(h, { email: 'invitee@example.test' })
     expect((await h.database.db.select({ role: users.role }).from(users).where(eq(users.id, invitee.user.id)).limit(1))[0]?.role).toBe('admin')
     expect((await h.database.db.select().from(invitations).where(and(eq(invitations.id, stored.id), isNull(invitations.acceptedAt))))).toHaveLength(0)
+    // The invite page still posts an accept afterwards and revisits the link, so both report the settled state instead of "expired".
     const accepted = await h.app.request(`http://app.example.test/api/invitations/${token}/accept`, { method: 'POST', headers: { cookie: invitee.cookie } })
-    expect(accepted.status).toBe(404)
+    expect(accepted.status).toBe(200); expect(await accepted.json()).toEqual({ ok: true, status: 'accepted' })
+    const revisited = await h.app.request(`http://app.example.test/api/invitations/${token}`)
+    expect(revisited.status).toBe(200); expect(await revisited.json()).toMatchObject({ invitation: { email: 'invitee@example.test', status: 'accepted' } })
+    expect((await h.app.request('http://app.example.test/api/invitations/not-a-token')).status).toBe(404)
+  } finally { h.close() }
+})
+
+it('reports expired and revoked invitations by status and refuses to accept them', async () => {
+  const h = await harness({ publicAppUrl: 'http://app.example.test', trustedOrigins: ['http://app.example.test'] })
+  try {
+    const owner = await signedIn(h, { email: 'owner@example.test', role: 'owner' })
+    const member = await signedIn(h, { email: 'member@example.test', role: 'member' })
+    const seed = async (token: string, row: { expiresAt?: string; revokedAt?: string }) => h.database.db.insert(invitations).values({ id: createId('invitation'), email: member.user.email, role: 'admin', tokenHash: createHash('sha256').update(token).digest('hex'), invitedBy: owner.user.id, expiresAt: row.expiresAt ?? new Date(Date.now() + 60_000).toISOString(), revokedAt: row.revokedAt ?? null, createdAt: new Date().toISOString() })
+    await seed('expired-token', { expiresAt: new Date(Date.now() - 1000).toISOString() })
+    await seed('revoked-token', { revokedAt: new Date().toISOString() })
+    expect(await (await h.app.request('http://app.example.test/api/invitations/expired-token')).json()).toMatchObject({ invitation: { status: 'expired' } })
+    expect(await (await h.app.request('http://app.example.test/api/invitations/revoked-token')).json()).toMatchObject({ invitation: { status: 'revoked' } })
+    for (const token of ['expired-token', 'revoked-token']) {
+      expect((await h.app.request(`http://app.example.test/api/invitations/${token}/accept`, { method: 'POST', headers: { cookie: member.cookie } })).status).toBe(410)
+    }
+    expect((await h.database.db.select({ role: users.role }).from(users).where(eq(users.id, member.user.id)).limit(1))[0]?.role).toBe('member')
   } finally { h.close() }
 })
 

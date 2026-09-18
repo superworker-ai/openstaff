@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto'
-import { and, eq, gt, isNull } from 'drizzle-orm'
+import { and, eq, gt, isNull, sql } from 'drizzle-orm'
 import { Hono, type Context } from 'hono'
 import { z } from 'zod'
 import { createId } from '@openstaff/shared'
@@ -16,17 +16,21 @@ const roleInput = z.object({ role: z.enum(['admin', 'member']) })
 const banInput = z.object({ reason: z.string().trim().min(1).max(500).optional(), expiresAt: z.iso.datetime().nullable().optional(), expiresIn: z.number().int().positive().max(31_536_000).optional() }).strict().refine((value) => value.expiresAt === undefined || value.expiresIn === undefined, 'Use either expiresAt or expiresIn')
 const invitationLifetime = 7 * 24 * 60 * 60 * 1000
 const tokenHash = (token: string) => createHash('sha256').update(token).digest('hex')
+type InvitationStatus = 'pending' | 'accepted' | 'revoked' | 'expired'
+const invitationStatus = (row: { expiresAt: string; acceptedAt: string | null; revokedAt: string | null }, now = new Date().toISOString()): InvitationStatus =>
+  row.acceptedAt ? 'accepted' : row.revokedAt ? 'revoked' : row.expiresAt > now ? 'pending' : 'expired'
 const canManage = (role: 'owner' | 'admin' | 'member') => role === 'owner' || role === 'admin'
 
 export function publicInvitationRoutes({ db }: Pick<ApiDependencies, 'db'>): Hono {
   const app = new Hono()
+  // The token is the secret, so its holder may learn the invitation's state; only an unknown token is a 404.
   app.get('/:token', async (context) => {
-    const invitation = (await db.select({ email: invitations.email, expiresAt: invitations.expiresAt }).from(invitations).where(and(
-      eq(invitations.tokenHash, tokenHash(context.req.param('token'))), isNull(invitations.acceptedAt), isNull(invitations.revokedAt), gt(invitations.expiresAt, new Date().toISOString()),
-    )).limit(1))[0]
-    if (!invitation) return context.json({ error: 'Invitation not found or expired', code: 'invalid_invitation' }, 404)
+    const invitation = (await db.select({ email: invitations.email, expiresAt: invitations.expiresAt, acceptedAt: invitations.acceptedAt, revokedAt: invitations.revokedAt }).from(invitations).where(
+      eq(invitations.tokenHash, tokenHash(context.req.param('token'))),
+    ).limit(1))[0]
+    if (!invitation) return context.json({ error: 'Invitation not found', code: 'invalid_invitation' }, 404)
     const workspaceName = (await db.select({ name: workspace.name }).from(workspace).where(eq(workspace.id, 'workspace')).limit(1))[0]?.name ?? 'OpenStaff'
-    return context.json({ invitation: { email: invitation.email, workspaceName, expiresAt: invitation.expiresAt } })
+    return context.json({ invitation: { email: invitation.email, workspaceName, expiresAt: invitation.expiresAt, status: invitationStatus(invitation) } })
   })
   return app
 }
@@ -166,19 +170,24 @@ export function invitationRoutes({ db, config, sendEmail, audit }: Pick<ApiDepen
     await db.update(invitations).set({ revokedAt: new Date().toISOString() }).where(eq(invitations.id, current.id))
     return context.json({ ok: true })
   })
+  // Signing up with the invited email already settles the invitation (see the Better Auth user.create hook), so a
+  // second accept from that account is a no-op success rather than an "expired" error.
   app.post('/:token/accept', async (context) => {
     const user = context.get('user')
     const invitation = (await db.select().from(invitations).where(and(
-      eq(invitations.tokenHash, tokenHash(context.req.param('token'))), eq(invitations.email, user.email), isNull(invitations.acceptedAt), isNull(invitations.revokedAt), gt(invitations.expiresAt, new Date().toISOString()),
+      eq(invitations.tokenHash, tokenHash(context.req.param('token'))), sql`lower(${invitations.email}) = ${user.email.trim().toLowerCase()}`,
     )).limit(1))[0]
-    if (!invitation) return context.json({ error: 'Invitation not found, expired, or for another email', code: 'invalid_invitation' }, 404)
+    if (!invitation) return context.json({ error: 'Invitation not found or for another email', code: 'invalid_invitation' }, 404)
+    const status = invitationStatus(invitation)
+    if (status === 'accepted') return context.json({ ok: true, status })
+    if (status !== 'pending') return context.json({ error: `Invitation ${status}`, code: 'invalid_invitation' }, 410)
     const at = new Date().toISOString()
     await db.transaction(async (tx) => {
       await tx.update(users).set({ role: invitation.role, updatedAt: new Date(at) }).where(and(eq(users.id, user.id), eq(users.role, 'member')))
       await tx.update(invitations).set({ acceptedAt: at }).where(and(eq(invitations.id, invitation.id), isNull(invitations.acceptedAt), isNull(invitations.revokedAt)))
     })
     await audit({ actorUserId: user.id, actorIp: requestIp(context.req.raw.headers), event: 'member.invite_accepted', targetType: 'invitation', targetId: invitation.id, metadata: { role: invitation.role } })
-    return context.json({ ok: true })
+    return context.json({ ok: true, status: 'accepted' as const })
   })
   return app
 }

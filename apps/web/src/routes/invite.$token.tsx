@@ -7,7 +7,7 @@ import { authClient } from '../lib/auth-client'
 import { serverApi } from '../lib/server-api'
 
 interface InvitationDetails {
-  invitation: { email: string; workspaceName: string; expiresAt: string }
+  invitation: { email: string; workspaceName: string; expiresAt: string; status: 'pending' | 'accepted' | 'revoked' | 'expired' }
 }
 
 const loadInvitation = createServerFn({ method: 'GET' }).validator((token: string) => token).handler(({ data }) => serverApi<InvitationDetails>(`/api/invitations/${data}`))
@@ -19,11 +19,28 @@ export const Route = createFileRoute('/invite/$token')({
 })
 
 function InvitationError() {
-  return <AuthCard title="Invitation unavailable"><p role="alert" className="text-sm text-fg-muted">This invitation is invalid or has expired. Ask the person who invited you to send a new link.</p><Link to="/login" className="mt-5 block text-sm text-fg-muted underline underline-offset-2">Return to login</Link></AuthCard>
+  return <AuthCard title="Invitation unavailable"><p role="alert" className="text-sm text-fg-muted">This invitation link is invalid. Ask the person who invited you to send a new link.</p><Link to="/login" className="mt-5 block text-sm text-fg-muted underline underline-offset-2">Return to login</Link></AuthCard>
+}
+
+// Signing up with the invited email settles the invitation server-side, so the link people return to (for example
+// from the verification email) is usually already accepted; that is a success, not a dead link.
+function SettledInvitation({ invitation, signedIn }: { invitation: InvitationDetails['invitation']; signedIn: boolean }) {
+  if (invitation.status === 'accepted') {
+    return <AuthCard title={`You're in ${invitation.workspaceName}`} subtitle={`Invitation for ${invitation.email}`}><p role="status" className="text-sm text-fg-muted">This invitation has already been accepted.</p><Link to={signedIn ? '/' : '/login'} className={`${authButtonClass} mt-5 block text-center`}>{signedIn ? 'Open workspace' : 'Log in'}</Link></AuthCard>
+  }
+  const reason = invitation.status === 'revoked' ? 'This invitation was revoked.' : 'This invitation has expired.'
+  return <AuthCard title="Invitation unavailable"><p role="alert" className="text-sm text-fg-muted">{reason} Ask the person who invited you to send a new link.</p><Link to="/login" className="mt-5 block text-sm text-fg-muted underline underline-offset-2">Return to login</Link></AuthCard>
 }
 
 function InvitationPage() {
-  const { invitation } = Route.useLoaderData(), { token } = Route.useParams(), navigate = useNavigate()
+  const { invitation } = Route.useLoaderData()
+  const session = authClient.useSession()
+  if (invitation.status !== 'pending') return <SettledInvitation invitation={invitation} signedIn={Boolean(session.data?.user)} />
+  return <PendingInvitation invitation={invitation} />
+}
+
+function PendingInvitation({ invitation }: { invitation: InvitationDetails['invitation'] }) {
+  const { token } = Route.useParams(), navigate = useNavigate()
   const session = authClient.useSession()
   const [mode, setMode] = useState<'login' | 'signup'>('signup'), [name, setName] = useState(''), [password, setPassword] = useState(''), [error, setError] = useState(''), [busy, setBusy] = useState(false), [verificationSent, setVerificationSent] = useState(false)
   const accept = async () => { await api(`/api/invitations/${token}/accept`, { method: 'POST' }); await navigate({ to: '/' }) }
