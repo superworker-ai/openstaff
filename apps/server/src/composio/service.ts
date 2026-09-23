@@ -1,4 +1,4 @@
-import { appName, createId } from '@openstaff/shared'
+import { appName, appSlug, createId } from '@openstaff/shared'
 import { eq } from 'drizzle-orm'
 import { ConnectionRequiredError } from '../agent/connections.js'
 import type { Database } from '../db/index.js'
@@ -118,16 +118,24 @@ export class ComposioService {
     return Boolean(await this.resolve(toolkit, actorUserId, fresh))
   }
 
-  async search(query: string, actorUserId: string | null, includeUnconnected = false) {
+  /** Composio's search is a loose use-case match over names and descriptions, so the result always says which apps were searched and why nothing matched. */
+  async search(query: string, actorUserId: string | null, options: { includeUnconnected?: boolean; toolkit?: string } = {}) {
     const client = this.getClient()
     const accounts = await this.listConnections()
     const connected = new Set([...new Set(accounts.map((item) => item.toolkit))].filter((toolkit) => this.resolveFrom(accounts, toolkit, actorUserId)))
-    if (!includeUnconnected && !connected.size) return []
-    const results = await client.search(query, includeUnconnected ? undefined : [...connected])
-    return results.filter((item) => includeUnconnected || connected.has(item.toolkit)).slice(0, 10).map((item) => {
+    const connectedApps = [...connected].sort()
+    const toolkit = options.toolkit ? appSlug(options.toolkit).replace(/-/g, '') : undefined
+    if (!options.includeUnconnected) {
+      if (toolkit && !connected.has(toolkit)) return { tools: [], connectedApps, note: `${appName(toolkit)} is not connected for you. Call request_connection to ask for it.` }
+      if (!connected.size) return { tools: [], connectedApps, note: 'No apps are connected. Call request_connection to ask for one.' }
+    }
+    const results = await client.search(query, toolkit ? [toolkit] : options.includeUnconnected ? undefined : connectedApps)
+    const tools = results.filter((item) => options.includeUnconnected || connected.has(item.toolkit)).slice(0, 10).map((item) => {
       this.tools.set(item.slug, item)
-      return { slug: item.slug, toolkit: item.toolkit, description: item.description, connected: connected.has(item.toolkit) }
+      return { slug: item.slug, toolkit: item.toolkit, description: item.description, connected: connected.has(item.toolkit), ...(item.inputParameters ? { inputParameters: item.inputParameters } : {}) }
     })
+    if (tools.length) return { tools, connectedApps }
+    return { tools, connectedApps, note: `No tool matched "${query}" in ${toolkit ?? connectedApps.join(', ') ?? 'the catalog'}. Search with two or three keywords naming the object and the verb, such as "list issues", or pass toolkit to narrow to one app.` }
   }
 
   async metadata(slug: string): Promise<ComposioTool> {

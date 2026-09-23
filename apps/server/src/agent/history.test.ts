@@ -54,8 +54,9 @@ it('tells the bot the current date and time in the turn instructions', async () 
     const trigger = await f.admission.post({ roomId: f.roomId, authorKind: 'user', authorId: f.userId, text: 'what day is it?' })
     const now = new Date('2026-09-14T15:04:05.000Z')
     const prompt = await buildTurnPrompt(f.db, f.computer, { roomId: f.roomId, botId: f.botId, triggerMessageId: trigger.message.id }, 2, undefined, undefined, now)
-    expect(prompt.instructions).toContain('Environment\nCurrent date and time: 2026-09-14T15:04:05.000Z (UTC)')
-    expect(prompt.instructions).toContain(`server timezone ${Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'}`)
-    expect(prompt.instructions.indexOf('Environment\n')).toBeLessThan(prompt.instructions.indexOf('Room contract\n'))
+    expect(prompt.environment).toContain('Environment\nCurrent date and time: 2026-09-14T15:04:05.000Z (UTC)')
+    expect(prompt.environment).toContain(`server timezone ${Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'}`)
+    // The timestamp changes every turn, so it stays out of the stable instructions and the runtime appends it last.
+    expect(prompt.instructions).not.toContain('Current date and time')
   } finally { await f.close() }
 })

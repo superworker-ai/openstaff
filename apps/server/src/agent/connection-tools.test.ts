@@ -18,7 +18,7 @@ it('only connected MCP and Composio tools reach the model and status events meas
   let active: 'none' | 'member' | 'workspace' = 'none'
   const execute = vi.fn(async () => ({}))
   const composio = new ComposioService(f.db, f.admission, { get: () => undefined }, f.directory, {
-    connections: async (userIds) => active === 'none' ? [] : [{ id: 'gmail', toolkit: 'gmail', status: 'ACTIVE', createdAt: new Date().toISOString(), userId: active === 'member' ? `workspace:${f.userId}` : 'workspace' }].filter((row) => userIds.includes(row.userId)), search: async () => [], metadata: async (slug) => ({ slug, toolkit: 'gmail', description: '' }), execute, link: async () => ({ redirectUrl: 'https://example.com' }), toolkits: async () => [{ slug: 'gmail', name: 'Gmail', description: '' }],
+    connections: async (userIds) => active === 'none' ? [] : [{ id: 'gmail', toolkit: 'gmail', status: 'ACTIVE', createdAt: new Date().toISOString(), userId: active === 'member' ? `workspace:${f.userId}` : 'workspace' }].filter((row) => userIds.includes(row.userId)), search: async () => [], metadata: async (slug) => ({ slug, toolkit: 'gmail', description: '' }), execute, link: async () => ({ redirectUrl: 'https://example.com' }), toolkits: async () => [{ slug: 'gmail', name: 'Gmail', description: '' }, { slug: 'linear', name: 'Linear', description: '' }],
   })
   try {
     const id = await new PluginInstaller(f.db, f.directory, secrets, registry).install(`path:${await writeOAuthPlugin(f.directory, fake.url)}`)
@@ -47,6 +47,8 @@ it('only connected MCP and Composio tools reach the model and status events meas
     // The prompt names the account kind so a bot never implies it is using the wrong inbox.
     expect(await connections.prompt(f.userId)).toContain('Gmail — connected (your account)')
     expect(await connections.prompt(null)).toContain('Gmail — available, not connected (Composio)')
+    // The rest of the marketplace stays out of the prompt; only connected, lapsed, and suggested apps are listed.
+    expect(await connections.prompt(f.userId)).not.toContain('Linear —')
     active = 'workspace'
     await composio.listConnections(true)
     expect(await connections.prompt(f.userId)).toContain('Gmail — connected (workspace)')

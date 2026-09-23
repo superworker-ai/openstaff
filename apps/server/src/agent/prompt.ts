@@ -9,6 +9,8 @@ import type { DurableWorkspace } from '../storage/durable.js'
 
 export interface TurnPrompt {
   instructions: string
+  /** Changes every turn, so the runtime appends it after the stable sections to keep the prompt prefix cacheable. */
+  environment: string
   messages: ModelMessage[]
 }
 
@@ -72,17 +74,17 @@ export async function buildTurnPrompt(
 
   const instructions = [
     `Identity\nYou are ${bot.name}, ${bot.job}.\n${bot.instructions}`,
-    environmentSection(now),
     `Room contract\nYou are in a ${room.kind} chat named ${room.name ?? bot.name}. Reply concisely like a teammate in chat. Do not @mention teammates unless you need them to act; to delegate, use the handoff tool. Never address humans by their full name; use their first name or nothing. Never reply just to agree, acknowledge, or repeat what a teammate said; if you have nothing new, reply with nothing. Stay in your lane. Never narrate tool calls. Ask for approval only through tools. When a tool is denied, do not retry the same action. A human may take over the computer, so browser tools wait until control returns; then take a fresh snapshot and never repeat a password, 2FA, CAPTCHA, or payment step the human completed.\n\nRoster\n${roster}`,
     `Memory\n${await readMemory(computer, bot.slug, durable)}`,
     `Skills index\n${await skillsIndex(computer, durable)}\n${registry?.enabled().flatMap((plugin) => plugin.skills.filter((skill) => skill.frontmatter['disable-model-invocation'] !== true).map((skill) => `${plugin.manifest.name}/${skill.name}: ${skill.description}`)).join('\n') ?? ''}\nLoad a skill body with read_skill only when needed; use read_plugin_file for sibling references.`,
     `Rules\n${registry?.enabled().flatMap((plugin) => plugin.rules.filter((rule) => rule.frontmatter.alwaysApply === true).map((rule) => rule.body)).join('\n\n') || '(No always-applied plugin rules.)'}`,
-    `Computer\nPrefer browser_* when a web page has a usable browser_snapshot. browser_navigate reuses the tab already on screen; pass newTab only when that tab must stay open. Use computer_* for desktop apps, canvases, dialogs, or when browser tools fail. Always call computer_screenshot before the first desktop click and after unexpected results. Computer coordinates are native screenshot pixels and must come from the screenshot you were shown.`,
+    `Computer\nConnected apps come first: for work inside an app listed as connected under Apps, call composio_search and then composio_execute before opening that app's website; use the browser for a connected app only when no tool covers the task or the task needs the page itself. Prefer browser_* when a web page has a usable browser_snapshot. browser_navigate reuses the tab already on screen; pass newTab only when that tab must stay open. Use computer_* for desktop apps, canvases, dialogs, or when browser tools fail. Always call computer_screenshot before the first desktop click and after unexpected results. Computer coordinates are native screenshot pixels and must come from the screenshot you were shown.`,
     `Delegation hints\n${registry?.enabled().flatMap((plugin) => plugin.agents.map((agent) => `${plugin.manifest.name}/${agent.name}: ${agent.description}`)).join('\n') || '(No delegation hints.)'}\nThese are reference hints, not executable agents.`,
     `Open tasks owned by you in this room\n${taskText}`,
   ].join('\n\n')
   return {
     instructions,
+    environment: environmentSection(now),
     messages: [
       { role: 'user', content: `Room history:\n${historyText}` },
       { role: 'user', content: await labelMessage(db, trigger) },

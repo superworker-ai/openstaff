@@ -15,15 +15,20 @@ it('filters connected tools, caches accounts, applies approval policy and posts 
   const f = await fixture()
   const client: ComposioClient = {
     connections: vi.fn(async () => [account({ id: 'connection-1', toolkit: 'github' })]),
-    search: vi.fn(async () => [{ slug: 'GITHUB_GET_REPOS', toolkit: 'github', description: 'Read repositories' }, { slug: 'GMAIL_SEND_EMAIL', toolkit: 'gmail', description: 'Send mail' }]),
+    search: vi.fn(async (query: string) => query === 'nothing here' ? [] : [{ slug: 'GITHUB_GET_REPOS', toolkit: 'github', description: 'Read repositories', inputParameters: { type: 'object', properties: {} } }, { slug: 'GMAIL_SEND_EMAIL', toolkit: 'gmail', description: 'Send mail' }]),
     metadata: async (slug) => ({ slug, toolkit: 'github', description: '', version: '20260101_00' }),
     execute: vi.fn(async () => ({ successful: true })), link: async () => ({ redirectUrl: 'https://example.com/connect' }), toolkits: async () => [],
   }
   const service = new ComposioService(f.db, f.admission, { get: () => undefined }, f.directory, client)
   try {
-    expect(await service.search('repo', f.userId)).toMatchObject([{ slug: 'GITHUB_GET_REPOS', connected: true }])
+    expect(await service.search('repo', f.userId)).toMatchObject({ tools: [{ slug: 'GITHUB_GET_REPOS', connected: true, inputParameters: { type: 'object' } }], connectedApps: ['github'] })
     expect(client.search).toHaveBeenCalledWith('repo', ['github'])
-    expect(await service.search('mail', f.userId, true)).toHaveLength(2)
+    expect((await service.search('mail', f.userId, { includeUnconnected: true })).tools).toHaveLength(2)
+    // A toolkit filter narrows the provider query; an unconnected one or an empty match explains itself instead of returning [].
+    expect(await service.search('repo', f.userId, { toolkit: 'GitHub' })).toMatchObject({ tools: [{ slug: 'GITHUB_GET_REPOS' }] })
+    expect(client.search).toHaveBeenLastCalledWith('repo', ['github'])
+    expect(await service.search('mail', f.userId, { toolkit: 'Gmail' })).toMatchObject({ tools: [], note: expect.stringContaining('Gmail is not connected') })
+    expect(await service.search('nothing here', f.userId)).toMatchObject({ tools: [], note: expect.stringContaining('No tool matched "nothing here" in github') })
     expect(client.connections).toHaveBeenCalledOnce()
     expect(client.connections).toHaveBeenCalledWith(['workspace', `workspace:${f.userId}`])
     const gate = toolApprovalFor('writes', new Set(), (slug) => service.isReadOnly(slug))

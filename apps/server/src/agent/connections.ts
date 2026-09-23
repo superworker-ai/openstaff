@@ -44,14 +44,31 @@ export class AgentConnections {
         } catch { lines.push(`${plugin.manifest.displayName ?? name} — connection error`) }
       }
     }
-    if (this.composio?.configured()) {
+    const composio = this.composio?.configured() ? this.composio : undefined
+    const listed = new Set<string>()
+    if (composio) {
       try {
-        const catalog = await this.composio.marketplace('', actorUserId)
-        lines.push(...catalog.toolkits.map((item) => `${item.name} — ${item.connected ? `connected (${item.scope === 'member' ? 'your account' : 'workspace'})` : 'available, not connected (Composio)'}`))
+        // Only accounts the actor can use, or that lapsed, reach the prompt. The full marketplace
+        // (1,500+ toolkits) stays behind request_connection instead of costing tokens every turn.
+        const [catalog, accounts] = await Promise.all([composio.marketplace('', actorUserId), composio.listConnections()])
+        const names = new Map(catalog.toolkits.map((item) => [item.slug, item.name]))
+        const relevant = accounts.filter((row) => row.scope === 'workspace' || actorUserId !== null && row.userId === actorUserId)
+        for (const toolkit of [...new Set(relevant.map((row) => row.toolkit))].sort()) {
+          const account = await composio.resolve(toolkit, actorUserId)
+          const name = names.get(toolkit) ?? appName(toolkit)
+          if (account) lines.push(`${name} — connected (${account.scope === 'member' ? 'your account' : 'workspace'})`)
+          else if (relevant.some((row) => row.toolkit === toolkit && ['EXPIRED', 'FAILED'].includes(row.status))) lines.push(`${name} — expired, not connected (Composio)`)
+          else continue
+          listed.add(name)
+        }
       } catch { lines.push('Composio — connection status unavailable; do not claim app access') }
     }
-    for (const name of knownApps.map(appName)) if (!lines.some((line) => line.startsWith(`${name} —`))) lines.push(`${name} — available, not connected`)
-    return `Apps\n${lines.join('\n') || '(No apps connected.)'}\nNever claim access to an app that is not connected. If the human asks for it, call request_connection with the app name. A connection request pauses this turn until the human connects or declines. If they decline, explain that you cannot access the app yet.`
+    // Suggested apps stay visible so the bot knows they can be requested; a plugin line for the same app does not hide the Composio one.
+    for (const name of knownApps.map(appName)) {
+      if (composio ? listed.has(name) : lines.some((line) => line.startsWith(`${name} —`))) continue
+      lines.push(`${name} — available, not connected${composio ? ' (Composio)' : ''}`)
+    }
+    return `Apps\n${lines.join('\n') || '(No apps connected.)'}\nNever claim access to an app that is not connected. Many more apps can be connected on request: if the human asks for one, call request_connection with the app name. A connection request pauses this turn until the human connects or declines. If they decline, explain that you cannot access the app yet.`
   }
   tools(actorUserId: string | null) {
     return { request_connection: tool({ description: 'Ask the human to connect an app and wait for their response before continuing. Does not call the app.', inputSchema: z.object({ app: z.string() }), execute: async ({ app }) => {

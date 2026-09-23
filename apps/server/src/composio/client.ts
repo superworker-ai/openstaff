@@ -1,6 +1,6 @@
 import { Composio, type AuthSchemeType, type CreateAuthConfigParams } from '@composio/core'
 
-export interface ComposioTool { slug: string; toolkit: string; description: string; tags?: string[]; version?: string }
+export interface ComposioTool { slug: string; toolkit: string; description: string; tags?: string[]; version?: string; inputParameters?: Record<string, unknown> }
 export interface ComposioConnection { id: string; toolkit: string; status: string; createdAt: string; userId: string }
 export interface ComposioToolkit { slug: string; name: string; description: string; logo?: string; aliases?: string[] }
 export interface ToolkitPage { items: ComposioToolkit[]; nextCursor: string | null; total: number }
@@ -46,7 +46,11 @@ class WorkspaceComposio extends Composio {
 export function createComposioClient(apiKey: string, dataDir: string): ComposioClient {
   const sdk = new WorkspaceComposio({ apiKey, allowTracking: false, fileUploadDirs: false, fileDownloadDir: `${dataDir}/downloads` })
   const request = () => ({ signal: AbortSignal.timeout(20_000) })
-  const normalize = (tool: { slug: string; description?: string; toolkit?: { slug: string }; tags?: string[]; version?: string }): ComposioTool => ({ slug: tool.slug, toolkit: tool.toolkit?.slug ?? tool.slug.split('_')[0]!.toLowerCase(), description: tool.description ?? '', tags: tool.tags, version: tool.version })
+  // The input schema travels with search results so the model can fill composio_execute arguments without guessing.
+  const normalize = (tool: { slug: string; description?: string; toolkit?: { slug: string }; tags?: string[]; version?: string; inputParameters?: unknown }): ComposioTool => ({
+    slug: tool.slug, toolkit: tool.toolkit?.slug ?? tool.slug.split('_')[0]!.toLowerCase(), description: tool.description ?? '', tags: tool.tags, version: tool.version,
+    ...(tool.inputParameters && typeof tool.inputParameters === 'object' ? { inputParameters: tool.inputParameters as Record<string, unknown> } : {}),
+  })
   // Composio only ships managed OAuth for some toolkits. The rest (1Password, most API-key
   // apps) need a workspace-owned auth config; with an empty credential set Composio's hosted
   // connect page collects the key from the person linking, so the popup flow stays the same.

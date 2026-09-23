@@ -209,7 +209,8 @@ export class AgentRuntime {
     const delta = new DeltaBroadcaster(hub, turn)
     const agent = new ToolLoopAgent({
       model: this.modelResolver(turn.model, { sessionId: conversationId(turn) }),
-      instructions: `${prompt.instructions}\n\n${await connections.prompt(turn.actorUserId)}`,
+      // Stable sections first, then the per-actor Apps list, then the timestamp, so provider prompt caching hits on the shared prefix.
+      instructions: `${prompt.instructions}\n\n${await connections.prompt(turn.actorUserId)}\n\n${prompt.environment}`,
       tools: agentTools,
       toolsContext: Object.fromEntries(Object.keys(agentTools).map((name) => [name, context])) as { [K in keyof typeof agentTools]: AgentToolContext },
       stopWhen: [isStepCount(40), () => failedConnections.size > 0],

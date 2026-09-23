@@ -205,7 +205,7 @@ Tools (every tool carries `toolsContext` with turn/bot/room ids and executes ser
 | `handoff` | `{ to_bot, brief, task_id? }` |
 | `create_task`, `update_task` | tasks ledger |
 | `create_automation` | cron + prompt, bound to this bot and room |
-| `composio_search` | search Composio tools by use case, only in connected toolkits |
+| `composio_search` | keyword search over connected toolkits, optional `toolkit` filter; returns input schemas and a note when nothing matched |
 | `composio_execute` | execute a slug with args; write actions require approval per policy |
 | `request_connection` | asks for an app connection using the approval pause, without executing an app action |
 | `mcp_*` | tools from enabled plugins' MCP servers, namespaced `<plugin>__<tool>` |
@@ -397,8 +397,10 @@ consent flows. Failures mark Expired; `connection.updated` invalidates live UI b
 Marketplace defaults to Apps: Composio toolkits and MCP plugins merge through shared app
 aliases. Skills contains plugins without MCP servers; hidden manifests remain hidden.
 Settings Connections combines accounts, remote servers, and saved clients, with reconnect,
-disconnect, and forget-client actions. The prompt's Apps section describes available apps
-and their connection state and forbids claiming unconnected access. `request_connection`
+disconnect, and forget-client actions. The prompt's Apps section lists connected and lapsed
+apps plus the suggested defaults (the rest of the marketplace stays behind
+`request_connection`), forbids claiming unconnected access, and the Computer section tells
+the bot to use connected app tools before opening that app in the browser. `request_connection`
 can pause proactively; search results and MCP descriptions also expose connection state.
 HTTP fixtures cover PKCE, state, credential secrecy, missing credentials, DCR, tool
 calls, and refresh. The shared browser harness tests the cross-site callback through
