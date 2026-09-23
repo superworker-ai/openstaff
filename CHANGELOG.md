@@ -28,8 +28,8 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 - Managed-host deployment: `OPENSTAFF_TARGET` and `OPENSTAFF_USER` build arguments, a Caddy
   gateway image, an all-in-one image with Litestream, a Render blueprint, a Cloudflare
   Containers Worker, README deploy buttons, and `docs/DEPLOY.md` with the Railway recipe.
-- `self-onboarding` skill and `docs/ONBOARDING.md` so agents and contributors start from the
-  same reading list, environment checks, and brief.
+- `docs/ONBOARDING.md` so agents and contributors start from the same reading list,
+  environment checks, and brief.
 
 ## 0.1.0
 
