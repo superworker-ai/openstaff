@@ -1,5 +1,6 @@
 packages:
   - apps/*
+  - '!apps/launch-video'
   - packages/*
 
 onlyBuiltDependencies:

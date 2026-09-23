@@ -40,3 +40,8 @@ playwright-report/
 
 # Agent scratch
 .context/
+
+# Maintainer-only notes and the launch video project (not part of the public release)
+docs/LAUNCH.md
+docs/CLOUD-PLAN.md
+apps/launch-video/
