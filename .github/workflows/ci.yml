@@ -16,7 +16,7 @@ jobs:
           MINIO_ROOT_PASSWORD: openstaffminiofixture
         ports: ["9000:9000"]
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: { persist-credentials: false }
       - name: Start the MinIO service command
         run: |
@@ -47,7 +47,7 @@ jobs:
   compose-smoke:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: { persist-credentials: false }
       - name: Validate supported Compose combinations
         env:
@@ -81,7 +81,7 @@ jobs:
   security:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: { fetch-depth: 0, persist-credentials: false }
       - uses: pnpm/action-setup@9fd676a19091d4595eefd76e4bd31c97133911f1
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
