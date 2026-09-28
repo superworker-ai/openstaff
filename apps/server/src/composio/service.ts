@@ -12,6 +12,18 @@ export type ConnectionScope = 'workspace' | 'member'
 export type ScopedConnection = Omit<ComposioConnection, 'userId'> & { scope: ConnectionScope; userId: string | null }
 export type ConnectionTarget = { scope: 'workspace' } | { scope: 'member'; userId: string }
 
+/**
+ * Composio toolkit slugs are inconsistent about separators (`googlecalendar` but `google_search_console`), and models pass
+ * names or guessed slugs. Match a requested toolkit against the slugs we know by ignoring case and separators, and return
+ * the canonical slug so the provider filter and the account lookup use Composio's own spelling.
+ */
+const toolkitKey = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '')
+export function matchToolkit(requested: string, known: Iterable<string>): string | undefined {
+  const key = toolkitKey(requested)
+  for (const slug of known) if (toolkitKey(slug) === key) return slug
+  return undefined
+}
+
 export function isReadOnlyComposioTool(tool: ComposioTool): boolean {
   // SDK tags are not a standardized safety signal, and isNoAuth says nothing about writes.
   return /(?:^|_)(GET|LIST|SEARCH|FETCH|READ|FIND)(?:_|$)/i.test(tool.slug)
@@ -102,7 +114,8 @@ export class ComposioService {
     return rows
   }
 
-  private resolveFrom(rows: ScopedConnection[], toolkit: string, actorUserId: string | null): ScopedConnection | undefined {
+  private resolveFrom(rows: ScopedConnection[], requested: string, actorUserId: string | null): ScopedConnection | undefined {
+    const toolkit = matchToolkit(requested, rows.map((row) => row.toolkit)) ?? requested
     if (actorUserId) {
       const personal = rows.find((row) => row.toolkit === toolkit && row.scope === 'member' && row.userId === actorUserId && row.status === 'ACTIVE')
       if (personal) return personal
@@ -124,7 +137,7 @@ export class ComposioService {
     const accounts = await this.listConnections()
     const connected = new Set([...new Set(accounts.map((item) => item.toolkit))].filter((toolkit) => this.resolveFrom(accounts, toolkit, actorUserId)))
     const connectedApps = [...connected].sort()
-    const toolkit = options.toolkit ? appSlug(options.toolkit).replace(/-/g, '') : undefined
+    const toolkit = options.toolkit ? matchToolkit(options.toolkit, connected) ?? appSlug(options.toolkit).replace(/-/g, '') : undefined
     if (!options.includeUnconnected) {
       if (toolkit && !connected.has(toolkit)) return { tools: [], connectedApps, note: `${appName(toolkit)} is not connected for you. Call request_connection to ask for it.` }
       if (!connected.size) return { tools: [], connectedApps, note: 'No apps are connected. Call request_connection to ask for one.' }

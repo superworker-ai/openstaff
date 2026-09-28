@@ -100,3 +100,22 @@ it.each([new Error('HTTP 401: connection expired'), { successful: false, error: 
     expect(await service.execute('GMAIL_GET_EMAILS', {}, f.userId)).toEqual({ successful: true })
   } finally { await f.close() }
 })
+
+it('matches toolkit slugs that Composio spells with underscores, however the model or the UI spells them', async () => {
+  const f = await fixture()
+  const client: ComposioClient = {
+    connections: vi.fn(async () => [account({ id: 'gsc', toolkit: 'google_search_console' })]),
+    search: vi.fn(async () => [{ slug: 'GOOGLE_SEARCH_CONSOLE_SEARCH_ANALYTICS_QUERY', toolkit: 'google_search_console', description: 'Query search analytics' }]),
+    metadata: async (slug) => ({ slug, toolkit: 'google_search_console', description: '' }), execute: vi.fn(async () => ({ successful: true })),
+    link: async () => ({ redirectUrl: 'https://example.com' }), toolkits: async () => [],
+  }
+  const service = new ComposioService(f.db, f.admission, { get: () => undefined }, f.directory, client)
+  try {
+    for (const spelling of ['google_search_console', 'googlesearchconsole', 'Google Search Console', 'google-search-console']) {
+      expect(await service.search('clicks', f.userId, { toolkit: spelling })).toMatchObject({ tools: [{ slug: 'GOOGLE_SEARCH_CONSOLE_SEARCH_ANALYTICS_QUERY', connected: true }], connectedApps: ['google_search_console'] })
+      expect(client.search).toHaveBeenLastCalledWith('clicks', ['google_search_console'])
+      expect((await service.resolve(spelling, f.userId))?.id).toBe('gsc')
+    }
+    expect(await service.search('mail', f.userId, { toolkit: 'gmail' })).toMatchObject({ tools: [], note: expect.stringContaining('not connected') })
+  } finally { await f.close() }
+})
