@@ -25,7 +25,7 @@ jobs:
             --env MINIO_ROOT_USER=minio-ci --env MINIO_ROOT_PASSWORD=openstaffminiofixture \
             quay.io/minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e server /data
           until curl --fail --silent http://127.0.0.1:9000/minio/health/live >/dev/null; do sleep 1; done
-      - uses: pnpm/action-setup@9fd676a19091d4595eefd76e4bd31c97133911f1
+      - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
@@ -83,7 +83,7 @@ jobs:
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with: { fetch-depth: 0, persist-credentials: false }
-      - uses: pnpm/action-setup@9fd676a19091d4595eefd76e4bd31c97133911f1
+      - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
