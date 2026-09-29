@@ -41,7 +41,7 @@
     "fast-glob": "^3.3.3",
     "freestyle-sandboxes": "0.1.46",
     "gray-matter": "^4.0.3",
-    "hono": "^4.11.4",
+    "hono": "^4.13.8",
     "nodemailer": "^10.0.10",
     "playwright": "^1.63.0",
     "react": "^19.2.1",
